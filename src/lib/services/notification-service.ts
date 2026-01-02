@@ -29,7 +29,7 @@ const logEvent = async (status: 'success' | 'failure', details: Record<string, a
 
 /**
  * Sends a WhatsApp message using the Z-API.
- * @param to - The recipient's phone number, including country code (e.g., 5569999999999).
+ * @param to - The recipient's phone number or group ID.
  * @param body - The text content of the message.
  */
 export async function sendWhatsappMessage(to: string, body: string): Promise<void> {
@@ -39,8 +39,11 @@ export async function sendWhatsappMessage(to: string, body: string): Promise<voi
     await logEvent('failure', { to, body, error: 'Z-API client not configured.' });
     return;
   }
+  
+  // Se 'to' contém '-', é um ID de grupo e não deve ser formatado.
+  // Caso contrário, é um número de telefone e removemos os caracteres não numéricos.
+  const destination = to.includes('-') ? to : to.replace(/\D/g, '');
 
-  const formattedPhone = to.replace(/\D/g, '');
   const apiUrl = `https://api.z-api.io/instances/${instanceId}/token/${instanceToken}/send-text`;
 
   try {
@@ -51,7 +54,7 @@ export async function sendWhatsappMessage(to: string, body: string): Promise<voi
         'Client-Token': clientToken,
       },
       body: JSON.stringify({
-        phone: formattedPhone,
+        phone: destination,
         message: body,
       }),
     });
@@ -60,14 +63,14 @@ export async function sendWhatsappMessage(to: string, body: string): Promise<voi
 
     if (response.ok && (responseData.zaapId || responseData.id)) {
         const zapiId = responseData.zaapId || responseData.id;
-        console.log(`WhatsApp message sent successfully to ${formattedPhone} with Z-API ID: ${zapiId}`);
-        await logEvent('success', { to: formattedPhone, body, zapiId });
+        console.log(`WhatsApp message sent successfully to ${destination} with Z-API ID: ${zapiId}`);
+        await logEvent('success', { to: destination, body, zapiId });
     } else {
         throw new Error(responseData.error || responseData.value?.message || responseData.message || 'Unknown error from Z-API');
     }
 
   } catch (error: any) {
     console.error('Failed to send WhatsApp message via Z-API:', error);
-    await logEvent('failure', { to: formattedPhone, body, error: error.message });
+    await logEvent('failure', { to: destination, body, error: error.message });
   }
 }
