@@ -229,7 +229,7 @@ export default function ExternalTicketsPage() {
       const sectorName = sector?.name || 'Não informado';
       const sectorGroupId = sector?.whatsappGroupId;
       
-      const message = `⚠️⚠️ Novo Chamado Criado ⚠️⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${newTicketData.client.name}\n*Contato:* ${newTicketData.client.phone || 'N/A'}\n*Endereço:* ${newTicketData.client.address || 'N/A'}\n*Solicitante:* ${newTicketData.requesterName || 'N/A'}\n\n*Descrição:* ${newTicketData.description}\n\n*Prioridade:* ${newTicketData.type}\n*Atribuído por:* ${user.name}`;
+      const message = `⚠️ Novo Chamado Criado ⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${newTicketData.client.name}\n*Contato:* ${newTicketData.client.phone || 'N/A'}\n*Endereço:* ${newTicketData.client.address || 'N/A'}\n*Solicitante:* ${newTicketData.requesterName || 'N/A'}\n\n*Descrição:* ${newTicketData.description}\n\n*Prioridade:* ${newTicketData.type}\n*Atribuído por:* ${user.name}`;
 
       if (newTicketData.technicianId) {
         // Chamado atribuído: notifica o técnico e o grupo do setor
@@ -311,7 +311,7 @@ export default function ExternalTicketsPage() {
             const sectorName = sector?.name || 'Não informado';
             const sectorGroupId = sector?.whatsappGroupId;
             
-            const message = `⚠️⚠️ Novo Chamado Criado ⚠️⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Prioridade:* ${ticket.type}`;
+            const message = `⚠️ Novo Chamado Criado ⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Prioridade:* ${ticket.type}`;
 
             if (user.phone) {
                 await sendWhatsappMessage(user.phone, message);
