@@ -56,8 +56,8 @@ const fetchWhatsappGroupsFlow = ai.defineFlow(
       
       const responseData = await response.json();
       
-      // A Z-API pode retornar um objeto com uma propriedade 'groups' ou um array diretamente
-      const groups = responseData.groups || responseData;
+      // A Z-API pode retornar um objeto com 'groups', 'value' ou um array diretamente.
+      const groups = responseData.groups || responseData.value || responseData;
 
       if (!Array.isArray(groups)) {
           throw new Error('Invalid response format from Z-API. Expected an array of groups.');
@@ -66,13 +66,14 @@ const fetchWhatsappGroupsFlow = ai.defineFlow(
       // Mapeia para o schema esperado, garantindo que apenas os campos necessários sejam retornados.
       const parsedGroups = groups.map((group: any) => ({
           id: group.id,
-          name: group.subject, // O nome do grupo vem no campo 'subject'
+          name: group.subject, // O nome do grupo vem no campo 'subject' da API da Z-API.
       }));
 
       return FetchGroupsOutputSchema.parse(parsedGroups);
 
     } catch (error: any) {
       console.error('Failed to fetch WhatsApp groups from Z-API:', error);
+      // Inclui a mensagem de erro original para melhor depuração.
       throw new Error(`Failed to fetch WhatsApp groups: ${error.message}`);
     }
   }
