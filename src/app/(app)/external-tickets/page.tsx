@@ -228,8 +228,10 @@ export default function ExternalTicketsPage() {
       if (newTicketData.technicianId) {
         const assignedTechnician = technicians.find(t => t.id === newTicketData.technicianId);
         const techUser = users.find(u => u.id === assignedTechnician?.userId);
+        const sectorName = sectors.find(s => s.id === newTicketData.sectorId)?.name || 'Não informado';
+        
         if (techUser?.phone) {
-            const message = `*Novo Chamado Atribuído no Nexus Service!*\n\n*Cliente:* ${newTicketData.client.name}\n*Contato:* ${newTicketData.client.phone || 'N/A'}\n*Endereço:* ${newTicketData.client.address || 'N/A'}\n*Solicitante:* ${newTicketData.requesterName || 'N/A'}\n\n*Descrição:* ${newTicketData.description}\n\n*Prioridade:* ${newTicketData.type}\n*Atribuído por:* ${user.name}`;
+            const message = `⚠️⚠️ Novo Chamado Criado ⚠️⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${newTicketData.client.name}\n*Contato:* ${newTicketData.client.phone || 'N/A'}\n*Endereço:* ${newTicketData.client.address || 'N/A'}\n*Solicitante:* ${newTicketData.requesterName || 'N/A'}\n\n*Descrição:* ${newTicketData.description}\n\n*Prioridade:* ${newTicketData.type}\n*Atribuído por:* ${user.name}`;
             await sendWhatsappMessage(techUser.phone, message);
         }
       }
@@ -285,17 +287,18 @@ export default function ExternalTicketsPage() {
     if (!user) return;
     const ticketRef = doc(db, "external-tickets", id);
     try {
-        await updateDoc(ticketRef, {
-            technicianId: user.id,
-            status: 'em andamento',
-            updatedAt: new Date().toISOString(),
-        });
-        
-        if (user.phone) {
-            const ticket = tickets.find(t => t.id === id);
-            if (ticket) {
-              const message = `*Você Pegou um Chamado no Nexus Service!*\n\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Prioridade:* ${ticket.type}`;
-              await sendWhatsappMessage(user.phone, message);
+        const ticket = tickets.find(t => t.id === id);
+        if (ticket) {
+            await updateDoc(ticketRef, {
+                technicianId: user.id,
+                status: 'em andamento',
+                updatedAt: new Date().toISOString(),
+            });
+            
+            if (user.phone) {
+                const sectorName = sectors.find(s => s.id === ticket.sectorId)?.name || 'Não informado';
+                const message = `⚠️⚠️ Novo Chamado Criado ⚠️⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Prioridade:* ${ticket.type}`;
+                await sendWhatsappMessage(user.phone, message);
             }
         }
 

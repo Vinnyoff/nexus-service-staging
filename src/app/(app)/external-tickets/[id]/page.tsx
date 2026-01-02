@@ -135,9 +135,10 @@ export default function ExternalTicketDetailsPage() {
         });
         const assignedTechnician = technicians.find(t => t.id === technicianId);
         const techUser = users.find(u => u.id === assignedTechnician?.userId);
+        const sectorName = allSectors.find(s => s.id === ticket.sectorId)?.name || 'Não informado';
         
         if (techUser?.phone) {
-            const message = `*Novo Chamado Atribuído no Nexus Service!*\n\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Prioridade:* ${ticket.type}\n*Atribuído por:* ${user.name}`;
+            const message = `⚠️⚠️ Novo Chamado Criado ⚠️⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Prioridade:* ${ticket.type}\n*Atribuído por:* ${user.name}`;
             await sendWhatsappMessage(techUser.phone, message);
         }
 
@@ -245,6 +246,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
     if (!ticket || !user) return;
 
     const ticketRef = doc(db, "external-tickets", ticket.id);
+    const sectorName = allSectors.find(s => s.id === ticket.sectorId)?.name || 'Não informado';
     try {
       await updateDoc(ticketRef, {
         technicianId: user.id,
@@ -253,7 +255,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
       });
       
       if (user.phone) {
-        const message = `*Você Pegou um Chamado no Nexus Service!*\n\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Prioridade:* ${ticket.type}`;
+        const message = `⚠️⚠️ Novo Chamado Criado ⚠️⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Prioridade:* ${ticket.type}`;
         await sendWhatsappMessage(user.phone, message);
       }
 
