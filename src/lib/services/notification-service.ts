@@ -4,9 +4,9 @@
 import { addDoc, collection } from 'firebase/firestore';
 import { db } from '@/firebase/config';
 
-const instanceId = process.env.NEXT_PUBLIC_ZAPI_INSTANCE_ID;
-const instanceToken = process.env.NEXT_PUBLIC_ZAPI_INSTANCE_TOKEN;
-const clientToken = process.env.NEXT_PUBLIC_ZAPI_CLIENT_TOKEN;
+const instanceId = process.env.ZAPI_INSTANCE_ID;
+const instanceToken = process.env.ZAPI_INSTANCE_TOKEN;
+const clientToken = process.env.ZAPI_CLIENT_TOKEN;
 
 if (!instanceId || !instanceToken || !clientToken) {
   console.warn('Z-API credentials (Instance ID, Instance Token, or Client Token) are not fully set in .env file. WhatsApp sending will be disabled.');
