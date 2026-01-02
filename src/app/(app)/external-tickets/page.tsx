@@ -225,17 +225,29 @@ export default function ExternalTicketsPage() {
     try {
       const docRef = await addDoc(collection(db, "external-tickets"), newTicketData);
       
+      const sector = sectors.find(s => s.id === newTicketData.sectorId);
+      const sectorName = sector?.name || 'Não informado';
+      const sectorGroupId = sector?.whatsappGroupId;
+      
+      const message = `⚠️⚠️ Novo Chamado Criado ⚠️⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${newTicketData.client.name}\n*Contato:* ${newTicketData.client.phone || 'N/A'}\n*Endereço:* ${newTicketData.client.address || 'N/A'}\n*Solicitante:* ${newTicketData.requesterName || 'N/A'}\n\n*Descrição:* ${newTicketData.description}\n\n*Prioridade:* ${newTicketData.type}\n*Atribuído por:* ${user.name}`;
+
       if (newTicketData.technicianId) {
+        // Chamado atribuído: notifica o técnico e o grupo do setor
         const assignedTechnician = technicians.find(t => t.id === newTicketData.technicianId);
         const techUser = users.find(u => u.id === assignedTechnician?.userId);
-        const sectorName = sectors.find(s => s.id === newTicketData.sectorId)?.name || 'Não informado';
-        
         if (techUser?.phone) {
-            const message = `⚠️⚠️ Novo Chamado Criado ⚠️⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${newTicketData.client.name}\n*Contato:* ${newTicketData.client.phone || 'N/A'}\n*Endereço:* ${newTicketData.client.address || 'N/A'}\n*Solicitante:* ${newTicketData.requesterName || 'N/A'}\n\n*Descrição:* ${newTicketData.description}\n\n*Prioridade:* ${newTicketData.type}\n*Atribuído por:* ${user.name}`;
             await sendWhatsappMessage(techUser.phone, message);
         }
+        if (sectorGroupId) {
+            await sendWhatsappMessage(sectorGroupId, message);
+        }
+      } else {
+        // Chamado não atribuído: notifica apenas o grupo do setor
+        if (sectorGroupId) {
+            await sendWhatsappMessage(sectorGroupId, message);
+        }
       }
-      
+
       await addDoc(collection(db, "system-logs"), {
         userId: user.id,
         event: 'EXTERNAL_TICKET_CREATED',
@@ -295,10 +307,17 @@ export default function ExternalTicketsPage() {
                 updatedAt: new Date().toISOString(),
             });
             
+            const sector = sectors.find(s => s.id === ticket.sectorId);
+            const sectorName = sector?.name || 'Não informado';
+            const sectorGroupId = sector?.whatsappGroupId;
+            
+            const message = `⚠️⚠️ Novo Chamado Criado ⚠️⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Prioridade:* ${ticket.type}`;
+
             if (user.phone) {
-                const sectorName = sectors.find(s => s.id === ticket.sectorId)?.name || 'Não informado';
-                const message = `⚠️⚠️ Novo Chamado Criado ⚠️⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Prioridade:* ${ticket.type}`;
                 await sendWhatsappMessage(user.phone, message);
+            }
+            if (sectorGroupId) {
+                await sendWhatsappMessage(sectorGroupId, message);
             }
         }
 

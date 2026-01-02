@@ -54,6 +54,7 @@ export interface Sector {
   code: string;
   description?: string;
   status: 'active' | 'archived';
+  whatsappGroupId?: string;
   euroInfoId?: string;
   rondoInfoId?: string;
 }

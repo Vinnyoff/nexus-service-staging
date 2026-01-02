@@ -23,6 +23,7 @@ const formSchema = z.object({
   name: z.string().min(2, { message: "O nome deve ter pelo menos 2 caracteres." }),
   code: z.string().min(1, { message: "O código é obrigatório." }),
   description: z.string().optional(),
+  whatsappGroupId: z.string().optional(),
   euroInfoId: z.string().optional(),
   rondoInfoId: z.string().optional(),
 });
@@ -44,6 +45,7 @@ export function EditSectorForm({ sector, onSave, onFinished }: EditSectorFormPro
       name: sector.name,
       code: sector.code,
       description: sector.description || "",
+      whatsappGroupId: sector.whatsappGroupId || "",
       euroInfoId: sector.euroInfoId || "",
       rondoInfoId: sector.rondoInfoId || "",
     },
@@ -93,6 +95,19 @@ export function EditSectorForm({ sector, onSave, onFinished }: EditSectorFormPro
                 <FormLabel>Descrição</FormLabel>
                 <FormControl>
                   <Textarea placeholder="Descreva o setor..." {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+           <FormField
+            control={form.control}
+            name="whatsappGroupId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>ID do Grupo no WhatsApp</FormLabel>
+                <FormControl>
+                  <Input placeholder="ID do grupo para notificações" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>

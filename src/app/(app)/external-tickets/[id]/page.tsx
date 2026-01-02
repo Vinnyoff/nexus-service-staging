@@ -133,13 +133,20 @@ export default function ExternalTicketDetailsPage() {
             status: 'em andamento',
             updatedAt: new Date().toISOString(),
         });
+
         const assignedTechnician = technicians.find(t => t.id === technicianId);
         const techUser = users.find(u => u.id === assignedTechnician?.userId);
-        const sectorName = allSectors.find(s => s.id === ticket.sectorId)?.name || 'Não informado';
+        const sector = allSectors.find(s => s.id === ticket.sectorId);
+        const sectorName = sector?.name || 'Não informado';
+        const sectorGroupId = sector?.whatsappGroupId;
+
+        const message = `⚠️⚠️ Novo Chamado Atribuído ⚠️⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Prioridade:* ${ticket.type}\n*Atribuído por:* ${user.name}`;
         
         if (techUser?.phone) {
-            const message = `⚠️⚠️ Novo Chamado Criado ⚠️⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Prioridade:* ${ticket.type}\n*Atribuído por:* ${user.name}`;
             await sendWhatsappMessage(techUser.phone, message);
+        }
+        if (sectorGroupId) {
+            await sendWhatsappMessage(sectorGroupId, message);
         }
 
         toast({
@@ -246,7 +253,10 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
     if (!ticket || !user) return;
 
     const ticketRef = doc(db, "external-tickets", ticket.id);
-    const sectorName = allSectors.find(s => s.id === ticket.sectorId)?.name || 'Não informado';
+    const sector = allSectors.find(s => s.id === ticket.sectorId);
+    const sectorName = sector?.name || 'Não informado';
+    const sectorGroupId = sector?.whatsappGroupId;
+
     try {
       await updateDoc(ticketRef, {
         technicianId: user.id,
@@ -254,10 +264,15 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
         updatedAt: new Date().toISOString(),
       });
       
+      const message = `⚠️⚠️ Novo Chamado Atribuído ⚠️⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Prioridade:* ${ticket.type}`;
+      
       if (user.phone) {
-        const message = `⚠️⚠️ Novo Chamado Criado ⚠️⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Prioridade:* ${ticket.type}`;
         await sendWhatsappMessage(user.phone, message);
       }
+      if (sectorGroupId) {
+        await sendWhatsappMessage(sectorGroupId, message);
+      }
+
 
       toast({
         title: 'Chamado Atribuído!',
@@ -310,7 +325,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
         <ExternalTicketDetails 
             ticket={ticket} 
             onAddComment={handleAddComment}
-            onReopenTicket={handleReopenTicket}
+            onReopenTicket={onReopenTicket}
             onAssignToMe={handleAssignTicketToCurrentUser}
             onFinalizeTicket={handleFinalizeTicket}
             onReturnToPending={handleReturnToPending}
