@@ -38,7 +38,8 @@ const fetchWhatsappGroupsFlow = ai.defineFlow(
       throw new Error('Z-API credentials are not configured in the environment.');
     }
 
-    const apiUrl = `https://api.z-api.io/instances/${instanceId}/token/${instanceToken}/groups`;
+    // Adiciona parâmetros de paginação obrigatórios
+    const apiUrl = `https://api.z-api.io/instances/${instanceId}/token/${instanceToken}/groups?page=1&pageSize=100`;
 
     try {
       const response = await fetch(apiUrl, {
@@ -56,18 +57,20 @@ const fetchWhatsappGroupsFlow = ai.defineFlow(
       
       const responseData = await response.json();
       
-      // A Z-API pode retornar um objeto com 'groups', 'value' ou um array diretamente.
-      const groups = responseData.groups || responseData.value || responseData;
+      // A Z-API pode retornar um objeto com 'value' ou um array diretamente.
+      const rawChats = responseData.value || responseData;
 
-      if (!Array.isArray(groups)) {
-          throw new Error('Invalid response format from Z-API. Expected an array of groups.');
+      if (!Array.isArray(rawChats)) {
+          throw new Error('Invalid response format from Z-API. Expected an array of chats.');
       }
       
-      // Mapeia para o schema esperado, garantindo que apenas os campos necessários sejam retornados.
-      const parsedGroups = groups.map((group: any) => ({
-          id: group.id,
-          name: group.subject, // O nome do grupo vem no campo 'subject' da API da Z-API.
-      }));
+      // Filtra apenas os grupos e mapeia para o schema esperado.
+      const parsedGroups = rawChats
+        .filter((chat: any) => chat.isGroup === true)
+        .map((group: any) => ({
+            id: group.phone, // O ID do grupo está no campo 'phone'
+            name: group.name,
+        }));
 
       return FetchGroupsOutputSchema.parse(parsedGroups);
 
