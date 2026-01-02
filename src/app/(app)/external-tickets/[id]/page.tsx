@@ -15,6 +15,8 @@ import { db, storage } from '@/firebase/config';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { sendWhatsappMessage } from '@/lib/services/notification-service';
 import { optimizeImage, optimizeSignature } from '@/lib/image-optimizer';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 export default function ExternalTicketDetailsPage() {
   const params = useParams();
@@ -140,7 +142,7 @@ export default function ExternalTicketDetailsPage() {
         const sectorName = sector?.name || 'Não informado';
         const sectorGroupId = sector?.whatsappGroupId;
 
-        const message = `⚠️⚠️ Novo Chamado Atribuído ⚠️⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Prioridade:* ${ticket.type}\n*Atribuído por:* ${user.name}`;
+        const message = `⚠️⚠️ Novo Chamado Criado ⚠️⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Prioridade:* ${ticket.type}\n*Atribuído por:* ${user.name}`;
         
         if (techUser?.phone) {
             await sendWhatsappMessage(techUser.phone, message);
@@ -160,6 +162,10 @@ export default function ExternalTicketDetailsPage() {
   };
   
 const handleFinalizeTicket = async (id: string, observations: string, photos: File[], signatureDataUrl?: string): Promise<boolean> => {
+    if (!user || !ticket) {
+        toast({ variant: 'destructive', title: 'Erro: Usuário ou chamado não encontrado.'});
+        return false;
+    }
     const ticketRef = doc(db, "external-tickets", id);
     try {
         const photoURLs = await Promise.all(
@@ -193,6 +199,14 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
                 timestamp: finalizationTime,
             }
         });
+
+        // Enviar notificação para o grupo do setor
+        const sector = allSectors.find(s => s.id === ticket.sectorId);
+        if (sector?.whatsappGroupId) {
+            const finalizationDate = format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+            const message = `✅ Chamado Concluido ✅\n\n*Cliente:* ${ticket.client.name}\n*Técnico:* ${user.name}\n*Finalizado em:* ${finalizationDate}`;
+            await sendWhatsappMessage(sector.whatsappGroupId, message);
+        }
 
         toast({ title: 'Chamado Finalizado com Sucesso!' });
         router.back();
@@ -264,7 +278,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
         updatedAt: new Date().toISOString(),
       });
       
-      const message = `⚠️⚠️ Novo Chamado Atribuído ⚠️⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Prioridade:* ${ticket.type}`;
+      const message = `⚠️⚠️ Novo Chamado Criado ⚠️⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Prioridade:* ${ticket.type}`;
       
       if (user.phone) {
         await sendWhatsappMessage(user.phone, message);
