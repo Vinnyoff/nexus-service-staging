@@ -10,16 +10,16 @@ import { useAuth } from '@/hooks/use-auth';
 import type { ExternalTicket, OptimizedRoute, Technician, RouteHistoryEntry } from '@/lib/types';
 import { optimizeTechnicianRoutes } from '@/ai/flows/optimize-technician-routes';
 import { OptimizedRouteList } from './optimized-route-list';
-import { doc, updateDoc, getDoc, arrayUnion, onSnapshot, collection } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, arrayUnion } from 'firebase/firestore';
 import { db } from '@/firebase/config';
 import { format } from 'date-fns';
 
 
 interface RouteOptimizerProps {
-    externalTickets: ExternalTicket[];
+    tickets: ExternalTicket[];
 }
 
-export function RouteOptimizer({ externalTickets: initialTickets }: RouteOptimizerProps) {
+export function RouteOptimizer({ tickets }: RouteOptimizerProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
@@ -27,22 +27,6 @@ export function RouteOptimizer({ externalTickets: initialTickets }: RouteOptimiz
   const [optimizedRoute, setOptimizedRoute] = useState<OptimizedRoute | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
-  const [externalTickets, setExternalTickets] = useState<ExternalTicket[]>(initialTickets);
-
-  useEffect(() => {
-    if (!user) return;
-
-    const q = collection(db, 'external-tickets');
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-        const ticketsData = querySnapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() } as ExternalTicket))
-            .filter(ticket => ticket.technicianId === user.id && ticket.status === 'em andamento');
-        setExternalTickets(ticketsData);
-    });
-
-    return () => unsubscribe();
-  }, [user]);
-
 
   const handleOptimizeRoute = () => {
     if (!user) {
@@ -58,7 +42,7 @@ export function RouteOptimizer({ externalTickets: initialTickets }: RouteOptimiz
     setOptimizedRoute(null);
     setIsRouteSaved(false);
 
-    const ticketsToOptimize = externalTickets.filter(ticket => {
+    const ticketsToOptimize = tickets.filter(ticket => {
         const isMyTicket = ticket.technicianId === user.id;
         const isInProgress = ticket.status === 'em andamento';
         const hasAddress = !!ticket.client.address;
@@ -286,5 +270,3 @@ export function RouteOptimizer({ externalTickets: initialTickets }: RouteOptimiz
     </Card>
   );
 }
-
-    

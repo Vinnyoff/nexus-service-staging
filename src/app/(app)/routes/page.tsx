@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { RouteOptimizer } from "@/components/routes/route-optimizer";
 import { db } from "@/firebase/config";
 import { ExternalTicket } from "@/lib/types";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
@@ -16,18 +16,28 @@ export default function RoutesPage() {
   const { user } = useAuth();
 
   useEffect(() => {
-    const fetchTickets = async () => {
-      if (!user) return;
-      setLoading(true);
-      const querySnapshot = await getDocs(collection(db, "external-tickets"));
-      const ticketsData = querySnapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() } as ExternalTicket))
-        .filter(ticket => ticket.technicianId === user.id && ticket.status === 'em andamento');
-
-      setTickets(ticketsData);
-      setLoading(false);
+    if (!user) {
+        setLoading(false);
+        return;
     };
-    fetchTickets();
+    
+    setLoading(true);
+    const ticketsQuery = query(
+        collection(db, "external-tickets"), 
+        where("technicianId", "==", user.id),
+        where("status", "==", "em andamento")
+    );
+    
+    const unsubscribe = onSnapshot(ticketsQuery, (snapshot) => {
+        const ticketsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ExternalTicket));
+        setTickets(ticketsData);
+        setLoading(false);
+    }, (error) => {
+        console.error("Error fetching tickets in real-time:", error);
+        setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, [user]);
 
   return (
@@ -42,7 +52,7 @@ export default function RoutesPage() {
         </div>
       ) : (
         <div className="mt-6">
-          <RouteOptimizer externalTickets={tickets} />
+          <RouteOptimizer tickets={tickets} />
         </div>
       )}
     </>
