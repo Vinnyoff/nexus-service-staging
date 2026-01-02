@@ -308,15 +308,10 @@ export default function ExternalTicketsPage() {
             });
             
             const sector = sectors.find(s => s.id === ticket.sectorId);
-            const sectorName = sector?.name || 'Não informado';
             const sectorGroupId = sector?.whatsappGroupId;
             
-            const message = `⚠️ Novo Chamado Criado ⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Prioridade:* ${ticket.type}`;
-
-            if (user.phone) {
-                await sendWhatsappMessage(user.phone, message);
-            }
             if (sectorGroupId) {
+                const message = `🏃‍♂️ Chamado em Andamento 🏃‍♂️\n\n*Técnico:* ${user.name}\n*Cliente:* ${ticket.client.name}`;
                 await sendWhatsappMessage(sectorGroupId, message);
             }
         }

@@ -171,12 +171,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
     const sector = allSectors.find(s => s.id === ticket.sectorId);
     
     try {
-        if (sector?.whatsappGroupId) {
-            const finalizationDate = format(parseISO(finalizationTime), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
-            const message = `✅ Chamado Concluido ✅\n\n*Cliente:* ${ticket.client.name}\n*Técnico:* ${user.name}\n*Finalizado em:* ${finalizationDate}`;
-            await sendWhatsappMessage(sector.whatsappGroupId, message);
-        }
-
+        
         const photoURLs = await Promise.all(
             photos.map(async (photo) => {
                 const optimizedPhoto = await optimizeImage(photo);
@@ -206,6 +201,12 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
                 timestamp: finalizationTime,
             }
         });
+
+        if (sector?.whatsappGroupId) {
+            const finalizationDate = format(parseISO(finalizationTime), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+            const message = `✅ Chamado Concluido ✅\n\n*Cliente:* ${ticket.client.name}\n*Técnico:* ${user.name}\n*Finalizado em:* ${finalizationDate}`;
+            await sendWhatsappMessage(sector.whatsappGroupId, message);
+        }
 
         toast({ title: 'Chamado Finalizado com Sucesso!' });
         router.back();
@@ -267,7 +268,6 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
 
     const ticketRef = doc(db, "external-tickets", ticket.id);
     const sector = allSectors.find(s => s.id === ticket.sectorId);
-    const sectorName = sector?.name || 'Não informado';
     const sectorGroupId = sector?.whatsappGroupId;
 
     try {
@@ -277,12 +277,8 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
         updatedAt: new Date().toISOString(),
       });
       
-      const message = `⚠️ Novo Chamado Criado ⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Prioridade:* ${ticket.type}`;
-      
-      if (user.phone) {
-        await sendWhatsappMessage(user.phone, message);
-      }
       if (sectorGroupId) {
+        const message = `🏃‍♂️ Chamado em Andamento 🏃‍♂️\n\n*Técnico:* ${user.name}\n*Cliente:* ${ticket.client.name}`;
         await sendWhatsappMessage(sectorGroupId, message);
       }
 
