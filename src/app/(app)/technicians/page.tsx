@@ -26,7 +26,6 @@ import { EditTechnicianFormValues } from "@/components/technicians/edit-technici
 
 export default function TechniciansPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [loading, setLoading] = useState(true);
   const [sectorFilter, setSectorFilter] = useState<string>('all');
@@ -34,40 +33,10 @@ export default function TechniciansPage() {
   const { user: adminUser } = useAuth(); 
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [rawTechnicians, setRawTechnicians] = useState<Technician[]>([]);
-
-  const filterVisibleTechnicians = useCallback((techs: Technician[], currentUser: User | null): Technician[] => {
-    if (!currentUser) return [];
-
-    if (currentUser.role === 'admin' || currentUser.role === 'gerente') {
-        return techs;
-    }
-    if (currentUser.role === 'encarregado') {
-        const userSectorIds = currentUser.sectorIds || [];
-        return userSectorIds.length > 0 
-            ? techs.filter(tech => tech.sectorIds && tech.sectorIds.some(techSectorId => userSectorIds.includes(techSectorId)))
-            : [];
-    }
-    return []; // Technicians cannot see this page.
-  }, []);
-
-  const combineTechniciansAndUsers = useCallback((techsData: Technician[], usersData: User[]): Technician[] => {
-    if (!adminUser) return [];
-    
-    return techsData.map(techData => {
-        const correspondingUser = usersData.find(u => u.id === techData.userId);
-        if (!correspondingUser) {
-            return null; // This technician's user doc might not exist yet or was deleted
-        }
-        return {
-            ...correspondingUser, // User data comes first
-            ...techData,        // Technician data overwrites, preserving specific technician fields
-            id: techData.id,    // Ensure technician ID (which is the same as userId) is correct
-        };
-    }).filter(Boolean) as Technician[]; // Filter out nulls
-  }, [adminUser]);
-
+  
   useEffect(() => {
     setLoading(true);
+    let initialLoadComplete = false;
 
     const unsubTechnicians = onSnapshot(query(collection(db, "technicians")), 
         (snapshot) => {
@@ -102,33 +71,60 @@ export default function TechniciansPage() {
         }
     );
 
+    // Turn off loading after a short delay to allow all listeners to populate state
+    const timer = setTimeout(() => {
+        if (loading) {
+            setLoading(false);
+        }
+    }, 2000);
+
     return () => {
         unsubTechnicians();
         unsubUsers();
         unsubSectors();
+        clearTimeout(timer);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
 
-  useEffect(() => {
-    if (rawTechnicians && allUsers && sectors) {
-        const combined = combineTechniciansAndUsers(rawTechnicians, allUsers);
-        const visible = filterVisibleTechnicians(combined, adminUser);
-        setTechnicians(visible);
+ const combinedTechnicians = useMemo(() => {
+    if (!rawTechnicians.length || !allUsers.length) return [];
+    
+    return rawTechnicians.map(techData => {
+        const correspondingUser = allUsers.find(u => u.id === techData.userId);
+        if (!correspondingUser) {
+            return null; // This technician's user doc might not exist yet or was deleted
+        }
+        return {
+            ...correspondingUser, // User data comes first
+            ...techData,        // Technician data overwrites, preserving specific technician fields
+            id: techData.id,    // Ensure technician ID (which is the same as userId) is correct
+        };
+    }).filter(Boolean) as Technician[];
+  }, [rawTechnicians, allUsers]);
+
+  const visibleTechnicians = useMemo(() => {
+     if (!adminUser) return [];
+
+    if (adminUser.role === 'admin' || adminUser.role === 'gerente') {
+        return combinedTechnicians;
     }
-    // Set loading to false once all initial listeners are established and have had a chance to fire.
-    // The individual listeners will handle their own empty states.
-    if (loading) {
-        setLoading(false);
+    if (adminUser.role === 'encarregado') {
+        const userSectorIds = adminUser.sectorIds || [];
+        return userSectorIds.length > 0 
+            ? combinedTechnicians.filter(tech => tech.sectorIds && tech.sectorIds.some(techSectorId => userSectorIds.includes(techSectorId)))
+            : [];
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rawTechnicians, allUsers, sectors, adminUser, combineTechniciansAndUsers, filterVisibleTechnicians]);
+    return []; // Technicians cannot see this page.
+  }, [combinedTechnicians, adminUser]);
+
   
   const filteredTechnicians = useMemo(() => {
     if (sectorFilter === 'all') {
-        return technicians;
+        return visibleTechnicians;
     }
-    return technicians.filter(tech => tech.sectorIds && tech.sectorIds.includes(sectorFilter));
-  }, [technicians, sectorFilter]);
+    return visibleTechnicians.filter(tech => tech.sectorIds && tech.sectorIds.includes(sectorFilter));
+  }, [visibleTechnicians, sectorFilter]);
 
 
   const handleAddTechnician = async (values: NewTechnicianFormValues) => {

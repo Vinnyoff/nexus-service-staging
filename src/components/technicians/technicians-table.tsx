@@ -362,15 +362,17 @@ export function TechniciansTable({ data, sectors, onSavePermissions, onStatusCha
   const columns: ColumnDef<Technician>[] = [
     {
       accessorKey: "name",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Nome
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Nome
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        )
+      },
       cell: ({ row }) => <div className="capitalize">{row.getValue("name")}</div>,
     },
     {
@@ -506,7 +508,7 @@ export function TechniciansTable({ data, sectors, onSavePermissions, onStatusCha
                   className="cursor-pointer"
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell key={cell.id} onClick={(e) => { if (cell.column.id === 'actions') { e.stopPropagation(); }}}>
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()
