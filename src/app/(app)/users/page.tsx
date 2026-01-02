@@ -34,21 +34,40 @@ export default function UsersPage() {
 
   useEffect(() => {
     setLoading(true);
-    
+    let usersLoaded = false;
+    let sectorsLoaded = false;
+  
+    const checkAllDataLoaded = () => {
+      if (usersLoaded && sectorsLoaded) {
+        setLoading(false);
+      }
+    };
+
     const unsubUsers = onSnapshot(collection(db, "users"), (snapshot) => {
         setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
-    }, () => setUsers([]));
+        usersLoaded = true;
+        checkAllDataLoaded();
+    }, (error) => {
+        console.error("Error fetching users:", error);
+        setUsers([]);
+        usersLoaded = true;
+        checkAllDataLoaded();
+    });
 
     const unsubSectors = onSnapshot(collection(db, "sectors"), (snapshot) => {
         setSectors(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sector)));
-    }, () => setSectors([]));
-
-    const timer = setTimeout(() => setLoading(false), 3000);
+        sectorsLoaded = true;
+        checkAllDataLoaded();
+    }, (error) => {
+        console.error("Error fetching sectors:", error);
+        setSectors([]);
+        sectorsLoaded = true;
+        checkAllDataLoaded();
+    });
 
     return () => {
         unsubUsers();
         unsubSectors();
-        clearTimeout(timer);
     };
   }, []);
   
