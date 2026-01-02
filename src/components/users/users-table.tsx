@@ -311,13 +311,12 @@ const ActionsCell = ({ row, currentUser, onEdit, onEditPermissions, onStatusChan
 interface UsersTableProps {
     data: User[];
     sectors: Sector[];
-    onDataChange: (data: User[]) => void;
     onSaveUser: (userId: string, values: EditUserFormValues) => Promise<boolean>;
     onSavePermissions: (userId: string, permissions: Partial<ModulePermissions>) => Promise<void>;
     onStatusChange: (user: User, newStatus: UserStatus) => void;
 }
 
-export function UsersTable({ data, sectors, onDataChange, onSaveUser, onSavePermissions, onStatusChange }: UsersTableProps) {
+export function UsersTable({ data, sectors, onSaveUser, onSavePermissions, onStatusChange }: UsersTableProps) {
   const { user: currentUser } = useAuth();
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
@@ -502,7 +501,7 @@ export function UsersTable({ data, sectors, onDataChange, onSaveUser, onSavePerm
                   className="cursor-pointer"
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} >
+                    <TableCell key={cell.id} onClick={(e) => { if(cell.column.id === 'actions') { e.stopPropagation(); }}}>
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()

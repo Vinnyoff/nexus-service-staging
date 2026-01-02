@@ -33,42 +33,27 @@ export default function UsersPage() {
   const { user: adminUser } = useAuth();
 
   useEffect(() => {
-    setLoading(true);
-    let usersLoaded = false;
-    let sectorsLoaded = false;
-  
-    const checkAllDataLoaded = () => {
-      if (usersLoaded && sectorsLoaded) {
-        setLoading(false);
-      }
-    };
-
     const unsubUsers = onSnapshot(collection(db, "users"), (snapshot) => {
         setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
-        usersLoaded = true;
-        checkAllDataLoaded();
+        if (loading) setLoading(false);
     }, (error) => {
         console.error("Error fetching users:", error);
         setUsers([]);
-        usersLoaded = true;
-        checkAllDataLoaded();
+        if (loading) setLoading(false);
     });
 
     const unsubSectors = onSnapshot(collection(db, "sectors"), (snapshot) => {
         setSectors(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sector)));
-        sectorsLoaded = true;
-        checkAllDataLoaded();
     }, (error) => {
         console.error("Error fetching sectors:", error);
         setSectors([]);
-        sectorsLoaded = true;
-        checkAllDataLoaded();
     });
 
     return () => {
         unsubUsers();
         unsubSectors();
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   
   const filteredUsers = useMemo(() => {
@@ -108,7 +93,6 @@ export default function UsersPage() {
 
         await setDoc(doc(db, "users", newUserId), newUser);
 
-        setUsers(prev => [newUser, ...prev]);
         setIsDialogOpen(false);
         toast({
             title: "Usuário Criado com Sucesso!",
@@ -143,11 +127,6 @@ export default function UsersPage() {
 
       await updateDoc(userDocRef, updateData);
 
-      setUsers(prevUsers => prevUsers.map(u => 
-        u.id === userId 
-          ? { ...u, ...updateData } 
-          : u
-      ));
       toast({ title: "Usuário atualizado com sucesso!" });
       return true;
     } catch (error) {
@@ -161,7 +140,6 @@ export default function UsersPage() {
     const userRef = doc(db, "users", user.id);
     try {
         await updateDoc(userRef, { status: newStatus });
-        setUsers(prev => prev.map(u => u.id === user.id ? { ...u, status: newStatus } : u));
         toast({
             title: "Status do Usuário Atualizado!",
             description: `O usuário ${user.name} foi ${newStatus === 'active' ? 'reativado' : 'desativado'}.`,
@@ -179,11 +157,6 @@ export default function UsersPage() {
             permissions,
             updatedAt: new Date().toISOString(),
         });
-        setUsers(prevUsers => prevUsers.map(u => 
-            u.id === userId 
-                ? { ...u, permissions: { ...u.permissions, ...permissions } } 
-                : u
-        ));
         toast({ title: "Permissões atualizadas com sucesso!" });
     } catch (error) {
         console.error("Error updating permissions:", error);
@@ -237,7 +210,6 @@ export default function UsersPage() {
         <UsersTable 
           data={filteredUsers} 
           sectors={sectors} 
-          onDataChange={setUsers}
           onSavePermissions={handleUpdatePermissions}
           onSaveUser={handleUpdateUser}
           onStatusChange={handleStatusChange}
