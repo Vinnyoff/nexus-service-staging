@@ -223,11 +223,13 @@ const ActionsCell: React.FC<ActionsCellProps> = ({ row, onEdit, onEditPermission
   const [actionType, setActionType] = React.useState<'activate' | 'deactivate' | null>(null);
 
   const handleActionClick = (e: React.MouseEvent, type: 'activate' | 'deactivate') => {
+    e.stopPropagation();
     setActionType(type);
     setIsAlertOpen(true);
   }
   
   const handleConfirmAction = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (actionType) {
       onStatusChange(technician, actionType === 'activate' ? 'active' : 'inactive');
     }
@@ -235,11 +237,18 @@ const ActionsCell: React.FC<ActionsCellProps> = ({ row, onEdit, onEditPermission
   }
 
   const handleEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
     onEdit(technician);
   }
 
   const handlePermissionsClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
     onEditPermissions(technician);
+  }
+  
+  const handleViewDetailsClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onViewDetails(technician);
   }
 
   return (
@@ -254,11 +263,11 @@ const ActionsCell: React.FC<ActionsCellProps> = ({ row, onEdit, onEditPermission
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Ações</DropdownMenuLabel>
-             <DropdownMenuItem onClick={() => onViewDetails(technician)}>
+             <DropdownMenuItem onClick={handleViewDetailsClick}>
               Ver Detalhes
             </DropdownMenuItem>
             <DropdownMenuItem
-              onClick={() => { navigator.clipboard.writeText(technician.id); }}
+              onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(technician.id); }}
             >
               Copiar ID
             </DropdownMenuItem>
@@ -290,7 +299,7 @@ const ActionsCell: React.FC<ActionsCellProps> = ({ row, onEdit, onEditPermission
                   </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancelar</AlertDialogCancel>
                   <AlertDialogAction onClick={handleConfirmAction}>Confirmar</AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -302,13 +311,12 @@ const ActionsCell: React.FC<ActionsCellProps> = ({ row, onEdit, onEditPermission
 interface TechniciansTableProps {
     data: Technician[];
     sectors: Sector[];
-    onDataChange: (data: Technician[]) => void;
     onSavePermissions: (userId: string, permissions: Partial<ModulePermissions>) => Promise<void>;
     onStatusChange: (technician: Technician, status: UserStatus) => void;
     onUpdateTechnician: (technicianId: string, values: EditTechnicianFormValues) => Promise<boolean>;
 }
 
-export function TechniciansTable({ data, sectors, onDataChange, onSavePermissions, onStatusChange, onUpdateTechnician }: TechniciansTableProps) {
+export function TechniciansTable({ data, sectors, onSavePermissions, onStatusChange, onUpdateTechnician }: TechniciansTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
     []

@@ -69,48 +69,59 @@ export default function TechniciansPage() {
   useEffect(() => {
     setLoading(true);
 
-    const collectionsToFetch = [
-        { name: 'technicians', setter: setRawTechnicians },
-        { name: 'users', setter: setAllUsers },
-        { name: 'sectors', setter: setSectors },
-    ];
+    const unsubTechnicians = onSnapshot(query(collection(db, "technicians")), 
+        (snapshot) => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Technician[];
+            setRawTechnicians(data);
+        },
+        (error) => {
+            console.warn("A coleção 'technicians' não foi encontrada ou ocorreu um erro.", error);
+            setRawTechnicians([]);
+        }
+    );
 
-    let loadedCount = 0;
-    const totalCollections = collectionsToFetch.length;
-
-    const unsubscribes = collectionsToFetch.map(({ name, setter }) => {
-        const q = query(collection(db, name));
-        return onSnapshot(q, 
-            (snapshot) => {
-                const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any;
-                setter(data);
-            },
-            (error) => {
-                console.warn(`A coleção '${name}' não foi encontrada ou ocorreu um erro. Tratando como vazia.`, error);
-                setter([]); 
-            }
-        );
-    });
+    const unsubUsers = onSnapshot(query(collection(db, "users")),
+        (snapshot) => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as User[];
+            setAllUsers(data);
+        },
+        (error) => {
+            console.warn("A coleção 'users' não foi encontrada ou ocorreu um erro.", error);
+            setAllUsers([]);
+        }
+    );
+    
+    const unsubSectors = onSnapshot(query(collection(db, "sectors")),
+        (snapshot) => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Sector[];
+            setSectors(data);
+        },
+        (error) => {
+            console.warn("A coleção 'sectors' não foi encontrada ou ocorreu um erro.", error);
+            setSectors([]);
+        }
+    );
 
     return () => {
-        unsubscribes.forEach(unsub => unsub());
+        unsubTechnicians();
+        unsubUsers();
+        unsubSectors();
     };
 }, []);
 
   useEffect(() => {
-      // This effect now ONLY combines data and sets the final loading state
-      if (rawTechnicians.length > 0 && allUsers.length > 0 && sectors.length > 0) {
-          const combined = combineTechniciansAndUsers(rawTechnicians, allUsers);
-          const visible = filterVisibleTechnicians(combined, adminUser);
-          setTechnicians(visible);
-          setLoading(false);
-      } else if (!loading && (rawTechnicians.length === 0 || allUsers.length === 0)) {
-          // If we're not loading but some data is missing, it means there are no technicians/users to show.
-          // This prevents getting stuck on the loading screen.
-          setTechnicians([]);
-          setLoading(false);
-      }
-  }, [rawTechnicians, allUsers, sectors, adminUser, combineTechniciansAndUsers, filterVisibleTechnicians, loading]);
+    if (rawTechnicians && allUsers && sectors) {
+        const combined = combineTechniciansAndUsers(rawTechnicians, allUsers);
+        const visible = filterVisibleTechnicians(combined, adminUser);
+        setTechnicians(visible);
+    }
+    // Set loading to false once all initial listeners are established and have had a chance to fire.
+    // The individual listeners will handle their own empty states.
+    if (loading) {
+        setLoading(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawTechnicians, allUsers, sectors, adminUser, combineTechniciansAndUsers, filterVisibleTechnicians]);
   
   const filteredTechnicians = useMemo(() => {
     if (sectorFilter === 'all') {
@@ -285,7 +296,6 @@ export default function TechniciansPage() {
         <TechniciansTable 
           data={filteredTechnicians} 
           sectors={sectors} 
-          onDataChange={setTechnicians} 
           onSavePermissions={handleUpdatePermissions}
           onStatusChange={handleStatusChange}
           onUpdateTechnician={handleUpdateTechnician}
