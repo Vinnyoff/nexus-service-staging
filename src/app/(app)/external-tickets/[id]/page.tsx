@@ -167,7 +167,18 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
         return false;
     }
     const ticketRef = doc(db, "external-tickets", id);
+    const finalizationTime = new Date().toISOString();
+
     try {
+        // Enviar notificação para o grupo do setor ANTES de atualizar o documento
+        // para garantir que pegamos os dados corretos antes da mudança de estado.
+        const sector = allSectors.find(s => s.id === ticket.sectorId);
+        if (sector?.whatsappGroupId) {
+            const finalizationDate = format(parseISO(finalizationTime), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+            const message = `✅ Chamado Concluido ✅\n\n*Cliente:* ${ticket.client.name}\n*Técnico:* ${user.name}\n*Finalizado em:* ${finalizationDate}`;
+            await sendWhatsappMessage(sector.whatsappGroupId, message);
+        }
+
         const photoURLs = await Promise.all(
             photos.map(async (photo) => {
                 const optimizedPhoto = await optimizeImage(photo);
@@ -188,8 +199,6 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
             ...(finalSignatureUrl && { signature: finalSignatureUrl }),
         };
 
-        const finalizationTime = new Date().toISOString();
-
         await updateDoc(ticketRef, {
             status: 'concluído',
             updatedAt: finalizationTime,
@@ -200,14 +209,6 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
             }
         });
 
-        // Enviar notificação para o grupo do setor
-        const sector = allSectors.find(s => s.id === ticket.sectorId);
-        if (sector?.whatsappGroupId) {
-            const finalizationDate = format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
-            const message = `✅ Chamado Concluido ✅\n\n*Cliente:* ${ticket.client.name}\n*Técnico:* ${user.name}\n*Finalizado em:* ${finalizationDate}`;
-            await sendWhatsappMessage(sector.whatsappGroupId, message);
-        }
-
         toast({ title: 'Chamado Finalizado com Sucesso!' });
         router.back();
         return true;
@@ -217,7 +218,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
         toast({
             variant: "destructive",
             title: "Erro ao finalizar chamado",
-            description: "Não foi possível salvar o relatório técnico. Verifique as permissões do Storage e tente novamente.",
+            description: "Não foi possível salvar o relatório técnico ou enviar a notificação. Verifique as permissões e tente novamente.",
         });
         return false;
     }
