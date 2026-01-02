@@ -431,7 +431,7 @@ export function TechniciansTable({ data, sectors, onSavePermissions, onStatusCha
   }
 
   const handleRowDoubleClick = (row: any) => {
-    handleEditPermissions(row.original);
+    handleEdit(row.original);
   }
 
   React.useEffect(() => {
@@ -619,7 +619,7 @@ export function TechniciansTable({ data, sectors, onSavePermissions, onStatusCha
                     <TechnicianPermissionsForm
                         technician={selectedTechnician}
                         onFinished={() => setIsPermissionsOpen(false)}
-                        onSave={handleSavePermissions}
+                        onSave={onSavePermissions}
                     />
                 )}
             </DialogContent>
