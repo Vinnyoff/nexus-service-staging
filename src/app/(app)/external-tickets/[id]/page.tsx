@@ -15,7 +15,7 @@ import { db, storage } from '@/firebase/config';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { sendWhatsappMessage } from '@/lib/services/notification-service';
 import { optimizeImage, optimizeSignature } from '@/lib/image-optimizer';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export default function ExternalTicketDetailsPage() {
@@ -168,11 +168,9 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
     }
     const ticketRef = doc(db, "external-tickets", id);
     const finalizationTime = new Date().toISOString();
-
+    const sector = allSectors.find(s => s.id === ticket.sectorId);
+    
     try {
-        // Enviar notificação para o grupo do setor ANTES de atualizar o documento
-        // para garantir que pegamos os dados corretos antes da mudança de estado.
-        const sector = allSectors.find(s => s.id === ticket.sectorId);
         if (sector?.whatsappGroupId) {
             const finalizationDate = format(parseISO(finalizationTime), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
             const message = `✅ Chamado Concluido ✅\n\n*Cliente:* ${ticket.client.name}\n*Técnico:* ${user.name}\n*Finalizado em:* ${finalizationDate}`;
@@ -340,7 +338,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
         <ExternalTicketDetails 
             ticket={ticket} 
             onAddComment={handleAddComment}
-            onReopenTicket={onReopenTicket}
+            onReopenTicket={handleReopenTicket}
             onAssignToMe={handleAssignTicketToCurrentUser}
             onFinalizeTicket={handleFinalizeTicket}
             onReturnToPending={handleReturnToPending}
