@@ -425,13 +425,8 @@ export default function ExternalTicketsPage() {
 
   const filteredTickets = tickets.filter(ticket => {
     // Role-based visibility pre-filter
-    if (user?.role === 'encarregado') {
+    if (user?.role === 'encarregado' || user?.role === 'tecnico') {
         if (!user.sectorIds?.includes(ticket.sectorId)) return false;
-    } else if (user?.role === 'tecnico') {
-        // Technicians can see all tickets within their assigned sectors.
-        if (!user.sectorIds?.includes(ticket.sectorId)) {
-            return false;
-        }
     }
     
     // Search Query Filter

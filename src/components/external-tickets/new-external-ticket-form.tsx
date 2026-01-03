@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useForm } from "react-hook-form";
@@ -148,7 +149,7 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                 city: "Ji-Paraná",
                 state: "RO",
             },
-            sectorId: user?.role === 'encarregado' && user.sectorIds?.length === 1 ? user.sectorIds[0] : (user?.role === 'tecnico' && user.sectorIds?.length === 1 ? user.sectorIds[0] : undefined),
+            sectorId: user?.role === 'tecnico' && user.sectorIds?.length === 1 ? user.sectorIds[0] : undefined,
             scheduledToTime: "",
             hasCustomSla: false,
             customSlaHours: undefined,
@@ -164,14 +165,9 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
         
     const visibleSectors = useMemo(() => {
         if (!user) return [];
-        if (user.role === 'admin' || user.role === 'gerente' || user.role === 'vendedor') {
-            return sectors.filter(s => s.status === 'active');
-        }
-        if ((user.role === 'encarregado' || user.role === 'tecnico') && user.sectorIds) {
-            return sectors.filter(s => user.sectorIds?.includes(s.id) && s.status === 'active');
-        }
-        return [];
-    }, [user, sectors]);
+        // Allow all active sectors for all roles capable of creating tickets
+        return sectors.filter(s => s.status === 'active');
+    }, [sectors]);
   
     const handleClientSelect = (clientId?: string) => {
         const client = clients.find(c => c.id === clientId);
