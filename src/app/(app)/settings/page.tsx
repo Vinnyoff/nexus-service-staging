@@ -98,10 +98,10 @@ export default function SettingsPage() {
     if (mobileNavForm.formState.isDirty) {
         onMobileNavSubmit(mobileNavFormValues);
     }
-  }, 1000, [mobileNavFormValues, mobileNavForm.formState.isDirty]);
+  }, 1000, [mobileNavFormValues]);
   
   useEffect(() => {
-    if (user) {
+    if (user && !mobileNavForm.formState.isDirty) {
         profileForm.reset(user);
         mobileNavForm.reset({
             dashboard: user.mobileNavPreferences?.dashboard ?? true,
@@ -115,7 +115,8 @@ export default function SettingsPage() {
             reports: user.mobileNavPreferences?.reports ?? false,
         });
     }
-  }, [user, profileForm, mobileNavForm]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   const passwordForm = useForm<PasswordFormValues>({
       resolver: zodResolver(passwordFormSchema),
@@ -532,7 +533,3 @@ export default function SettingsPage() {
     </>
   );
 }
-
-    
-
-    
