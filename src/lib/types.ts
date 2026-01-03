@@ -31,6 +31,16 @@ export type MobileNavPreferences = {
     reports?: boolean;
 }
 
+// Representa a inscrição para notificações push
+export interface PushSubscription {
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+}
+
+
 export interface User {
   id: string;
   name: string;
@@ -46,6 +56,7 @@ export interface User {
   mobileNavPreferences?: MobileNavPreferences;
   euroInfoId?: string;
   rondoInfoId?: string;
+  pushSubscriptions?: PushSubscription[];
 }
 
 export interface Sector {

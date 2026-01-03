@@ -26,7 +26,57 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       // Se a verificação terminou e não há usuário, redirecione para o login.
       if (!user) {
         router.replace('/login');
+        return;
       }
+      
+      // Lógica de inscrição para notificações push
+      if (typeof window !== 'undefined' && 'serviceWorker' in navigator && window.PushManager) {
+        navigator.serviceWorker.ready.then(registration => {
+            registration.pushManager.getSubscription().then(subscription => {
+                if (!subscription) {
+                    // Não está inscrito, solicita permissão
+                    const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+                    if (!vapidPublicKey) {
+                        console.error("VAPID public key não definida no ambiente.");
+                        return;
+                    }
+
+                    registration.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: vapidPublicKey
+                    }).then(newSubscription => {
+                        console.log('New push subscription:', newSubscription);
+                        // Envia a nova inscrição para o servidor
+                        fetch('/api/notifications/subscribe', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ subscription: newSubscription, userId: user.id })
+                        });
+                    }).catch(err => {
+                        if (Notification.permission === 'denied') {
+                            console.warn('Permissão para notificações foi negada.');
+                        } else {
+                            console.error('Falha ao se inscrever para notificações push:', err);
+                        }
+                    });
+                } else {
+                    console.log('Existing push subscription found.');
+                    // Opcional: reenviar a inscrição para o servidor para garantir que está atualizada
+                     fetch('/api/notifications/subscribe', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ subscription: subscription, userId: user.id })
+                    });
+                }
+            });
+        });
+      }
+
+
     }, [user, loading, router]);
     
     // Mostra a tela de carregamento enquanto o useAuth verifica o estado do usuário.
