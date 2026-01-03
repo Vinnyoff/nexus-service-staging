@@ -105,9 +105,7 @@ export default function ContractsPage() {
         }
       });
       
-      // Create initial scheduled tickets for each sector in the contract
-      const firstVisitDate = addDays(now, values.frequencyDays);
-
+      // Create an immediate "start" ticket for each sector in the contract
       for (const sectorId of values.sectorIds) {
           const ticketRef = doc(collection(db, "external-tickets"));
           const newTicketData: Omit<ExternalTicket, 'id'> = {
@@ -121,10 +119,9 @@ export default function ContractsPage() {
               requesterName: 'Sistema (Criação de Contrato)',
               sectorId: sectorId,
               creatorId: user.id,
-              description: `Primeiro agendamento de manutenção preventiva (Contrato ${contractRef.id.substring(0, 5)}).`,
-              type: 'agendado',
-              status: 'pendente', // Starts as pending, but scheduled
-              scheduledTo: firstVisitDate.toISOString(),
+              description: `Chamado inicial de configuração do contrato ${contractRef.id.substring(0, 5)}.`,
+              type: 'contrato',
+              status: 'pendente',
               createdAt: now.toISOString(),
               updatedAt: now.toISOString(),
           };
@@ -134,8 +131,8 @@ export default function ContractsPage() {
       await batch.commit();
       
       toast({
-        title: "Contrato e chamados iniciais agendados!",
-        description: `O contrato para ${client.name} e os primeiros chamados preventivos foram gerados e agendados.`,
+        title: "Contrato e chamados iniciais criados!",
+        description: `O contrato para ${client.name} e os primeiros chamados preventivos foram gerados.`,
       });
       setIsNewDialogOpen(false);
 

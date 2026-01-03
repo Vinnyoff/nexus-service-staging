@@ -7,15 +7,15 @@ import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { Comment, ExternalTicket, User, Sector, Technician, TechnicalReport } from '@/lib/types';
+import type { Comment, ExternalTicket, User, Sector, Technician, TechnicalReport, ServiceContract } from '@/lib/types';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
-import { doc, onSnapshot, updateDoc, arrayUnion, collection, getDocs, deleteField } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, arrayUnion, collection, getDocs, deleteField, query, where, limit, addDoc } from 'firebase/firestore';
 import { db, storage } from '@/firebase/config';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { sendWhatsappMessage } from '@/lib/services/notification-service';
 import { optimizeImage, optimizeSignature } from '@/lib/image-optimizer';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export default function ExternalTicketDetailsPage() {
@@ -182,6 +182,43 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
                 timestamp: finalizationTime,
             }
         });
+        
+        // Schedule next preventive ticket if this was a contract ticket
+        if (ticket.type === 'contrato') {
+            const contractsRef = collection(db, "serviceContracts");
+            const q = query(
+                contractsRef, 
+                where('clientId', '==', ticket.client.id), 
+                where('status', '==', 'active'),
+                limit(1)
+            );
+            const contractSnapshot = await getDocs(q);
+
+            if (!contractSnapshot.empty) {
+                const contract = contractSnapshot.docs[0].data() as ServiceContract;
+                const nextVisitDate = addDays(new Date(), contract.frequencyDays);
+                
+                const newTicketData: Omit<ExternalTicket, 'id'> = {
+                    ...ticket,
+                    description: `Manutenção preventiva programada (Contrato ${contract.id.substring(0,5)})`,
+                    type: 'contrato',
+                    status: 'pendente', // The new ticket starts as pending
+                    scheduledTo: nextVisitDate.toISOString(),
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    creatorId: 'system',
+                    technicianId: undefined, // Unassign technician
+                    comments: [],
+                    technicalReport: undefined,
+                    checkIn: undefined,
+                    checkOut: undefined,
+                    enRoute: undefined,
+                    enRouteAt: undefined,
+                };
+                await addDoc(collection(db, "external-tickets"), newTicketData);
+            }
+        }
+
 
         if (sector?.whatsappGroupId) {
             const finalizationDate = format(parseISO(finalizationTime), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
