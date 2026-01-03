@@ -130,20 +130,20 @@ export default function ExternalTicketDetailsPage() {
     if (!ticket || !user) return;
     const ticketRef = doc(db, "external-tickets", ticket.id);
     try {
-        await updateDoc(ticketRef, {
-            technicianId: technicianId,
-            status: 'em andamento',
-            updatedAt: new Date().toISOString(),
-        });
-
         const assignedTechnician = technicians.find(t => t.id === technicianId);
         const techUser = users.find(u => u.id === assignedTechnician?.userId);
         const sector = allSectors.find(s => s.id === ticket.sectorId);
         const sectorName = sector?.name || 'Não informado';
         const sectorGroupId = sector?.whatsappGroupId;
-
-        const message = `⚠️ Novo Chamado Criado ⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Prioridade:* ${ticket.type}\n*Atribuído por:* ${user.name}`;
         
+        await updateDoc(ticketRef, {
+            technicianId: technicianId,
+            status: 'em andamento',
+            updatedAt: new Date().toISOString(),
+        });
+        
+        const message = `⚠️ Novo Chamado Criado ⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Prioridade:* ${ticket.type}\n*Status:* Em andamento por ${assignedTechnician?.name}\n*Atribuído por:* ${user.name}`;
+
         if (techUser?.phone) {
             await sendWhatsappMessage(techUser.phone, message);
         }
@@ -166,8 +166,9 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
         toast({ variant: 'destructive', title: 'Erro: Usuário ou chamado não encontrado.'});
         return false;
     }
+
+    const finalizationTime = new Date().toISOString(); // Definido no início
     const ticketRef = doc(db, "external-tickets", id);
-    const finalizationTime = new Date().toISOString();
     const sector = allSectors.find(s => s.id === ticket.sectorId);
     
     try {
@@ -204,7 +205,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
 
         if (sector?.whatsappGroupId) {
             const finalizationDate = format(parseISO(finalizationTime), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
-            const message = `✅ Chamado Concluido ✅\n\n*Cliente:* ${ticket.client.name}\n*Técnico:* ${user.name}\n*Finalizado em:* ${finalizationDate}`;
+            const message = `✅ Chamado Concluido ✅\n\n*Cliente:* ${ticket.client.name}\n*Finalizado em:* ${finalizationDate}\n*Status:* Concluído por ${user.name}`;
             await sendWhatsappMessage(sector.whatsappGroupId, message);
         }
 
@@ -278,7 +279,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
       });
       
       if (sectorGroupId) {
-        const message = `🏃‍♂️ Chamado em Andamento 🏃‍♂️\n\n*Técnico:* ${user.name}\n*Cliente:* ${ticket.client.name}`;
+        const message = `🏃‍♂️ Chamado em Andamento 🏃‍♂️\n\n*Cliente:* ${ticket.client.name}\n*Status:* Em andamento por ${user.name}`;
         await sendWhatsappMessage(sectorGroupId, message);
       }
 

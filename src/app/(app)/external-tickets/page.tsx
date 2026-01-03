@@ -229,23 +229,24 @@ export default function ExternalTicketsPage() {
       const sectorName = sector?.name || 'Não informado';
       const sectorGroupId = sector?.whatsappGroupId;
       
-      const message = `⚠️ Novo Chamado Criado ⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${newTicketData.client.name}\n*Contato:* ${newTicketData.client.phone || 'N/A'}\n*Endereço:* ${newTicketData.client.address || 'N/A'}\n*Solicitante:* ${newTicketData.requesterName || 'N/A'}\n\n*Descrição:* ${newTicketData.description}\n\n*Prioridade:* ${newTicketData.type}\n*Atribuído por:* ${user.name}`;
+      let messageStatusText = "Status: Pendente";
+      const assignedTechnician = technicians.find(t => t.id === newTicketData.technicianId);
+
+      if (newTicketData.technicianId && assignedTechnician) {
+          messageStatusText = `Status: Em andamento por ${assignedTechnician.name}`;
+      }
+      
+      const message = `⚠️ Novo Chamado Criado ⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${newTicketData.client.name}\n*Contato:* ${newTicketData.client.phone || 'N/A'}\n*Endereço:* ${newTicketData.client.address || 'N/A'}\n*Solicitante:* ${newTicketData.requesterName || 'N/A'}\n\n*Descrição:* ${newTicketData.description}\n\n*Prioridade:* ${newTicketData.type}\n*${messageStatusText}\n*Atribuído por:* ${user.name}`;
 
       if (newTicketData.technicianId) {
-        // Chamado atribuído: notifica o técnico e o grupo do setor
-        const assignedTechnician = technicians.find(t => t.id === newTicketData.technicianId);
         const techUser = users.find(u => u.id === assignedTechnician?.userId);
         if (techUser?.phone) {
             await sendWhatsappMessage(techUser.phone, message);
         }
-        if (sectorGroupId) {
-            await sendWhatsappMessage(sectorGroupId, message);
-        }
-      } else {
-        // Chamado não atribuído: notifica apenas o grupo do setor
-        if (sectorGroupId) {
-            await sendWhatsappMessage(sectorGroupId, message);
-        }
+      }
+      // Sempre notifica o grupo, se houver
+      if (sectorGroupId) {
+          await sendWhatsappMessage(sectorGroupId, message);
       }
 
       await addDoc(collection(db, "system-logs"), {
@@ -311,7 +312,7 @@ export default function ExternalTicketsPage() {
             const sectorGroupId = sector?.whatsappGroupId;
             
             if (sectorGroupId) {
-                const message = `🏃‍♂️ Chamado em Andamento 🏃‍♂️\n\n*Técnico:* ${user.name}\n*Cliente:* ${ticket.client.name}`;
+                const message = `🏃‍♂️ Chamado em Andamento 🏃‍♂️\n\n*Cliente:* ${ticket.client.name}\n*Status:* Em andamento por ${user.name}`;
                 await sendWhatsappMessage(sectorGroupId, message);
             }
         }
