@@ -244,7 +244,7 @@ export default function ExternalTicketsPage() {
       if (newTicketData.technicianId) {
         const techUser = users.find(u => u.id === assignedTechnician?.userId);
         if (techUser?.phone) {
-            await sendWhatsappMessage(techUser.phone, message);
+            await sendWhatsappMessage(techUser.phone, message, techUser.id, `/external-tickets/${docRef.id}`);
         }
       }
       // Sempre notifica o grupo, se houver

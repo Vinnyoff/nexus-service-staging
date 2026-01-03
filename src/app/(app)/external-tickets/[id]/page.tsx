@@ -125,7 +125,7 @@ export default function ExternalTicketDetailsPage() {
         const message = `⚠️ Novo Chamado Criado ⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Prioridade:* ${ticket.type}\n*Status:* Em andamento por ${assignedTechnician?.name}\n*Atribuído por:* ${user.name}`;
 
         if (techUser?.phone) {
-            await sendWhatsappMessage(techUser.phone, message);
+            await sendWhatsappMessage(techUser.phone, message, techUser.id, `/external-tickets/${ticket.id}`);
         }
         if (sectorGroupId) {
             await sendWhatsappMessage(sectorGroupId, message);
