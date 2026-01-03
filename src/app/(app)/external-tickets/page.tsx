@@ -8,12 +8,12 @@ import { Button } from "@/components/ui/button";
 import { PlusCircle, Loader2, LayoutDashboard, List, RefreshCcw } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { NewExternalTicketForm, NewExternalTicketFormValues } from "@/components/external-tickets/new-external-ticket-form";
-import { ExternalTicket, Sector, User, Technician } from "@/lib/types";
+import { ExternalTicket, Sector, User, Technician, Comment } from "@/lib/types";
 import { useAuth } from "@/hooks/use-auth";
 import { ExternalTicketCard } from "@/components/external-tickets/external-ticket-card";
 import { ExternalTicketsFilterBar, StatusFilter } from "@/components/external-tickets/external-tickets-filter-bar";
 import { useToast } from "@/hooks/use-toast";
-import { addDoc, collection, getDocs, doc, updateDoc, deleteField, writeBatch, onSnapshot } from "firebase/firestore";
+import { addDoc, collection, getDocs, doc, updateDoc, deleteField, writeBatch, onSnapshot, arrayUnion } from "firebase/firestore";
 import { db } from "@/firebase/config";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { isToday, parseISO, isPast } from "date-fns";
@@ -21,12 +21,15 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ExternalTicketsTable } from "@/components/external-tickets/external-tickets-table";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { sendWhatsappMessage } from "@/lib/services/notification-service";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 
 type ConfirmationState = {
     isOpen: boolean;
     action: 'reopen' | 'cancel' | 'take' | null;
     ticket: ExternalTicket | null;
+    reason?: string;
 };
 
 const STATUS_FILTER_STORAGE_KEY = 'external_tickets_status_filter';
@@ -44,7 +47,7 @@ export default function ExternalTicketsPage() {
   const { user } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
-  const [confirmation, setConfirmation] = useState<ConfirmationState>({ isOpen: false, action: null, ticket: null });
+  const [confirmation, setConfirmation] = useState<ConfirmationState>({ isOpen: false, action: null, ticket: null, reason: '' });
   const isMobile = useIsMobile();
   const [viewMode, setViewMode] = useState<ViewMode>('kanban');
 
@@ -311,8 +314,8 @@ export default function ExternalTicketsPage() {
             const sector = sectors.find(s => s.id === ticket.sectorId);
             const sectorGroupId = sector?.whatsappGroupId;
             
+            const message = `🏃‍♂️ Chamado em Andamento 🏃‍♂️\n\n*Cliente:* ${ticket.client.name}\n*Status:* Em andamento por ${user.name}`;
             if (sectorGroupId) {
-                const message = `🏃‍♂️ Chamado em Andamento 🏃‍♂️\n\n*Cliente:* ${ticket.client.name}\n*Status:* Em andamento por ${user.name}`;
                 await sendWhatsappMessage(sectorGroupId, message);
             }
         }
@@ -332,7 +335,7 @@ export default function ExternalTicketsPage() {
 
     const enRouteTime = new Date().toISOString();
 
-    const ticketsToUpdate = tickets.map(t => {
+    tickets.forEach(t => {
         if (t.technicianId === user.id) {
             const isTarget = t.id === ticketId;
             if (t.enRoute && !isTarget) {
@@ -345,7 +348,6 @@ export default function ExternalTicketsPage() {
                 targetTicket = { ...t, enRoute: true, enRouteAt: enRouteTime };
             }
         }
-        return t;
     });
 
     try {
@@ -362,14 +364,23 @@ export default function ExternalTicketsPage() {
     }
 };
 
-  const handleReopenTicket = async (id: string) => {
+  const handleReopenTicket = async (id: string, reason: string) => {
+    if (!user) return;
     const ticketRef = doc(db, "external-tickets", id);
     try {
+      const comment: Comment = {
+        id: `comment-${Date.now()}`,
+        authorId: user.id,
+        content: `**Chamado Reaberto:** ${reason}`,
+        createdAt: new Date().toISOString(),
+      };
+
       await updateDoc(ticketRef, {
         status: 'pendente',
         type: 'retorno',
         technicianId: deleteField(),
         updatedAt: new Date().toISOString(),
+        comments: arrayUnion(comment)
       });
       toast({
         title: 'Chamado Reaberto com Sucesso!',
@@ -394,32 +405,65 @@ export default function ExternalTicketsPage() {
   };
 
   const handleConfirmAction = (action: 'reopen' | 'cancel' | 'take', ticket: ExternalTicket) => {
-    setConfirmation({ isOpen: true, action, ticket });
+    setConfirmation({ isOpen: true, action, ticket, reason: '' });
   };
 
   const executeConfirmedAction = async () => {
     if (!confirmation.ticket || !confirmation.action) return;
 
-    const { ticket, action } = confirmation;
+    const { ticket, action, reason } = confirmation;
 
     if (action === 'reopen') {
-        await handleReopenTicket(ticket.id);
+        if (!reason) {
+            toast({ variant: 'destructive', title: 'Justificativa obrigatória' });
+            return;
+        }
+        await handleReopenTicket(ticket.id, reason);
     } else if (action === 'cancel') {
         await handleCancelTicket(ticket.id);
     } else if (action === 'take') {
         await handleAssignTicket(ticket.id);
     }
 
-
     setConfirmation({ isOpen: false, action: null, ticket: null });
   };
   
-  const getConfirmationMessage = () => {
+  const getConfirmationContent = () => {
     switch (confirmation.action) {
-      case 'reopen': return 'reabrir';
-      case 'cancel': return 'cancelar';
-      case 'take': return 'pegar';
-      default: return 'executar esta ação';
+      case 'reopen': return (
+        <>
+            <AlertDialogTitle>Reabrir Chamado</AlertDialogTitle>
+            <AlertDialogDescription>
+                Por favor, informe o motivo para reabrir este chamado. A justificativa será adicionada aos comentários.
+            </AlertDialogDescription>
+            <div className="py-4">
+                <Label htmlFor="reopen-reason">Justificativa</Label>
+                <Textarea 
+                    id="reopen-reason"
+                    placeholder="Ex: O problema persistiu..."
+                    value={confirmation.reason}
+                    onChange={(e) => setConfirmation(c => ({ ...c, reason: e.target.value }))}
+                />
+            </div>
+        </>
+      );
+      case 'cancel': return (
+        <>
+            <AlertDialogTitle>Confirmar Cancelamento</AlertDialogTitle>
+            <AlertDialogDescription>
+                Você tem certeza que deseja cancelar este chamado?
+            </AlertDialogDescription>
+        </>
+      );
+       case 'take': return (
+        <>
+            <AlertDialogTitle>Confirmar Atribuição</AlertDialogTitle>
+            <AlertDialogDescription>
+                Você tem certeza que deseja pegar este chamado?
+            </AlertDialogDescription>
+        </>
+      );
+      default: return null;
     }
   };
 
@@ -498,7 +542,7 @@ export default function ExternalTicketsPage() {
     return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
   });
   
-  const hasActiveRoute = filteredTickets.some(t => t.technicianId === user?.id && t.enRoute);
+  const hasActiveRoute = tickets.some(t => t.technicianId === user?.id && t.enRoute);
 
 
   if (loading) {
@@ -617,14 +661,11 @@ export default function ExternalTicketsPage() {
        <AlertDialog open={confirmation.isOpen} onOpenChange={(open) => !open && setConfirmation({isOpen: false, action: null, ticket: null})}>
         <AlertDialogContent>
             <AlertDialogHeader>
-                <AlertDialogTitle>Confirmar Ação</AlertDialogTitle>
-                <AlertDialogDescription>
-                    {`Você tem certeza que deseja ${getConfirmationMessage()} este chamado?`}
-                </AlertDialogDescription>
+                {getConfirmationContent()}
             </AlertDialogHeader>
             <AlertDialogFooter>
                 <AlertDialogCancel>Voltar</AlertDialogCancel>
-                <AlertDialogAction onClick={executeConfirmedAction}>Confirmar</AlertDialogAction>
+                <AlertDialogAction onClick={executeConfirmedAction} disabled={confirmation.action === 'reopen' && !confirmation.reason}>Confirmar</AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -632,5 +673,3 @@ export default function ExternalTicketsPage() {
     </>
   );
 }
-
-    

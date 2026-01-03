@@ -26,8 +26,8 @@ import { optimizeImage, optimizeSignature } from '@/lib/image-optimizer';
 interface ExternalTicketDetailsProps {
   ticket: ExternalTicket;
   onAddComment: (commentText: string) => void;
-  onReopenTicket: (ticketId: string) => void;
-  onReturnToPending: (ticketId: string) => void;
+  onReopenTicket: (ticketId: string, reason: string) => void;
+  onReturnToPending: (ticketId: string, reason: string) => void;
   onAssignToMe: () => void;
   onFinalizeTicket: (ticketId: string, observations: string, photos: File[], signature?: string) => Promise<boolean>;
   onDescriptionChange: (newDescription: string) => void;
@@ -61,6 +61,7 @@ export function ExternalTicketDetails({
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [descriptionValue, setDescriptionValue] = useState(ticket.description);
   const [selectedTechnician, setSelectedTechnician] = useState('');
+  const [reason, setReason] = useState('');
   
   const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
   const [isSignatureDialogOpen, setIsSignatureDialogOpen] = useState(false);
@@ -81,8 +82,7 @@ export function ExternalTicketDetails({
     isCurrentUserAssigned ||
     currentUser.role === 'admin' ||
     currentUser.role === 'gerente' ||
-    (currentUser.role === 'encarregado' && currentUser.sectorIds?.includes(ticket.sectorId)) ||
-    (ticket.status === 'concluído') // Allow any technician to reopen
+    (currentUser.role === 'encarregado' && currentUser.sectorIds?.includes(ticket.sectorId))
   );
   
   const canSupervisorManage = currentUser && (currentUser.role === 'admin' || currentUser.role === 'gerente' || currentUser.role === 'encarregado');
@@ -335,7 +335,7 @@ export function ExternalTicketDetails({
                                     {format(new Date(comment.createdAt), 'dd/MM/yy HH:mm', { locale: ptBR })}
                                     </p>
                                 </div>
-                                <p className="text-sm text-muted-foreground">{comment.content}</p>
+                                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{comment.content}</p>
                                 </div>
                             </div>
                             );
@@ -374,9 +374,36 @@ export function ExternalTicketDetails({
           <CardContent className="flex flex-col gap-2">
             {isConcluded ? (
                 canUserIntervene && (
-                    <Button className="w-full" variant="secondary" onClick={() => onReopenTicket(ticket.id)}>
-                        <History className="mr-2 h-4 w-4" /> Abrir Revisão
-                    </Button>
+                     <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                           <Button className="w-full" variant="secondary">
+                               <History className="mr-2 h-4 w-4" /> Abrir Revisão
+                           </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Reabrir Chamado como Revisão</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Por favor, informe o motivo para reabrir este chamado. A justificativa será adicionada aos comentários.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <div className="py-4">
+                                <Label htmlFor="reopen-reason">Justificativa</Label>
+                                <Textarea 
+                                    id="reopen-reason"
+                                    placeholder="Ex: O problema persistiu..."
+                                    value={reason}
+                                    onChange={(e) => setReason(e.target.value)}
+                                />
+                            </div>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleReopenTicket(ticket.id, reason)} disabled={!reason.trim()}>
+                                    Confirmar e Reabrir
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
                 )
             ) : canTakeAction ? (
               <>
@@ -482,9 +509,36 @@ export function ExternalTicketDetails({
                         </Alert>
                     )}
                     
-                    <Button variant="destructive" className="w-full" onClick={() => onReturnToPending(ticket.id)}>
-                        <Undo className="mr-2 h-4 w-4" /> Devolver para Pendente
-                    </Button>
+                     <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                           <Button className="w-full" variant="destructive">
+                               <Undo className="mr-2 h-4 w-4" /> Devolver para Pendente
+                           </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Devolver Chamado para Pendente</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                   Informe o motivo para devolver este chamado. A justificativa será adicionada como um comentário.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <div className="py-4">
+                                <Label htmlFor="return-reason">Justificativa</Label>
+                                <Textarea 
+                                    id="return-reason"
+                                    placeholder="Ex: Não consegui contato com o cliente."
+                                    value={reason}
+                                    onChange={(e) => setReason(e.target.value)}
+                                />
+                            </div>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleReturnToPending(ticket.id, reason)} disabled={!reason.trim()}>
+                                    Confirmar e Devolver
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
                   </>
                 )}
               </>

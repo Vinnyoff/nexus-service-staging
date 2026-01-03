@@ -94,26 +94,6 @@ export default function ExternalTicketDetailsPage() {
     }
   };
   
-  const handleStatusChange = async (id: string, status: ExternalTicket['status']) => {
-    const ticketRef = doc(db, "external-tickets", id);
-    try {
-      await updateDoc(ticketRef, {
-        status,
-        updatedAt: new Date().toISOString(),
-      });
-      toast({ title: 'Status do Chamado Atualizado!' });
-      if (status === 'concluído') {
-        router.back();
-      }
-    } catch (error) {
-      console.error(`Error updating status for ticket ${id}:`, error);
-      toast({
-        variant: "destructive",
-        title: "Erro ao atualizar status",
-      });
-    }
-  };
-
   const handleDescriptionChange = async (newDescription: string) => {
     if (!ticket) return;
     const ticketRef = doc(db, "external-tickets", ticket.id);
@@ -167,7 +147,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
         return false;
     }
 
-    const finalizationTime = new Date().toISOString(); // Definido no início
+    const finalizationTime = new Date().toISOString();
     const ticketRef = doc(db, "external-tickets", id);
     const sector = allSectors.find(s => s.id === ticket.sectorId);
     
@@ -225,9 +205,11 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
 };
 
   
-  const handleReopenTicket = async (id: string) => {
+  const handleReopenTicket = async (id: string, reason: string) => {
+    if (!user) return;
     const ticketRef = doc(db, "external-tickets", id);
     try {
+        await handleAddComment(`**Chamado Reaberto:** ${reason}`);
         await updateDoc(ticketRef, {
             status: 'pendente',
             type: 'retorno',
@@ -236,7 +218,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
         });
         toast({
             title: 'Chamado Reaberto com Sucesso!',
-            description: `O chamado #${id} foi movido para pendentes como retorno.`,
+            description: `O chamado #${id.substring(0,4)} foi movido para pendentes como retorno.`,
         });
         router.push('/external-tickets');
     } catch (error) {
@@ -245,9 +227,11 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
     }
   };
 
-  const handleReturnToPending = async (id: string) => {
+  const handleReturnToPending = async (id: string, reason: string) => {
+    if (!user) return;
     const ticketRef = doc(db, "external-tickets", id);
     try {
+      await handleAddComment(`**Chamado Devolvido para Pendente:** ${reason}`);
       await updateDoc(ticketRef, {
         status: 'pendente',
         technicianId: deleteField(),
@@ -255,7 +239,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
       });
       toast({
         title: 'Chamado Devolvido!',
-        description: `O chamado #${id} retornou para la fila de pendentes.`,
+        description: `O chamado #${id.substring(0,4)} retornou para a fila de pendentes.`,
       });
       router.push('/external-tickets');
     } catch (error) {
@@ -278,11 +262,11 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
         updatedAt: new Date().toISOString(),
       });
       
+      const message = `🏃‍♂️ Chamado em Andamento 🏃‍♂️\n\n*Cliente:* ${ticket.client.name}\n*Status:* Em andamento por ${user.name}`;
+      
       if (sectorGroupId) {
-        const message = `🏃‍♂️ Chamado em Andamento 🏃‍♂️\n\n*Cliente:* ${ticket.client.name}\n*Status:* Em andamento por ${user.name}`;
         await sendWhatsappMessage(sectorGroupId, message);
       }
-
 
       toast({
         title: 'Chamado Atribuído!',
