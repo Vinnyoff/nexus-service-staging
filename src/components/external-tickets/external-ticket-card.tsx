@@ -13,7 +13,7 @@ import { format, parseISO, differenceInHours, formatDistanceToNowStrict, isAfter
 import { ptBR } from "date-fns/locale";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuItem, DropdownMenuSeparator } from "../ui/dropdown-menu";
 import { Button } from "../ui/button";
-import { MoreHorizontal, Calendar, UserSquare, MapPin, Hand, History, XCircle, Truck, Copy, Clock, AlertTriangle, Building2 } from "lucide-react";
+import { MoreHorizontal, Calendar, UserSquare, MapPin, Hand, History, XCircle, Truck, Copy, Clock, AlertTriangle, Building2, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 import { useEffect, useState } from "react";
@@ -86,6 +86,7 @@ export function ExternalTicketCard({
   const assignee = users.find((u) => u.id === ticket.technicianId);
   const sector = sectors.find(s => s.id === ticket.sectorId);
   const isCurrentUserAssigned = currentUser?.id === ticket.technicianId;
+  const hasComments = ticket.comments && ticket.comments.length > 0;
 
   const canUserIntervene = currentUser && (
     isCurrentUserAssigned ||
@@ -173,7 +174,21 @@ export function ExternalTicketCard({
       <CardHeader>
         <div className="flex justify-between items-start">
           <div className="flex-1 space-y-1.5">
-            <CardTitle className="text-lg">{truncatedClientName}</CardTitle>
+            <div className="flex items-center gap-2">
+                <CardTitle className="text-lg">{truncatedClientName}</CardTitle>
+                {hasComments && (
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger>
+                                <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>Este chamado possui comentários.</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                )}
+            </div>
             {ticket.requesterName && <CardDescription className="text-xs">Solicitado por: {ticket.requesterName}</CardDescription>}
             <CardDescription className="pt-1">{renderTechnicianStatus()}</CardDescription>
           </div>
