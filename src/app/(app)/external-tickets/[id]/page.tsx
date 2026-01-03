@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
@@ -286,7 +287,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
   };
 
   const handleAssignTicketToCurrentUser = async () => {
-    if (!ticket || !user) return;
+    if (!ticket || !user || !user.phone) return;
 
     const ticketRef = doc(db, "external-tickets", ticket.id);
     const sector = allSectors.find(s => s.id === ticket.sectorId);
@@ -304,6 +305,9 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
       if (sectorGroupId) {
         await sendWhatsappMessage(sectorGroupId, message);
       }
+      
+      // Envia notificação web push para o próprio usuário
+      await sendWhatsappMessage(user.phone, message, user.id, `/external-tickets/${ticket.id}`);
 
       toast({
         title: 'Chamado Atribuído!',
