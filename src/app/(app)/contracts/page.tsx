@@ -20,6 +20,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { ContractsTable } from "@/components/contracts/contracts-table";
 import { NewContractForm, NewContractFormValues } from "@/components/contracts/new-contract-form";
 import { EditContractForm, EditContractFormValues } from "@/components/contracts/edit-contract-form";
+import { addDays } from "date-fns";
 
 export default function ContractsPage() {
   const [isNewDialogOpen, setIsNewDialogOpen] = useState(false);
@@ -80,6 +81,7 @@ export default function ContractsPage() {
     }
     try {
       const batch = writeBatch(db);
+      const now = new Date();
 
       const newContractData: Omit<ServiceContract, 'id'> = {
         clientId: values.clientId,
@@ -87,8 +89,8 @@ export default function ContractsPage() {
         sectorIds: values.sectorIds,
         frequencyDays: values.frequencyDays,
         status: 'active',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
       };
       
       const contractRef = doc(collection(db, "serviceContracts"));
@@ -103,7 +105,9 @@ export default function ContractsPage() {
         }
       });
       
-      // Create initial tickets for each sector in the contract
+      // Create initial scheduled tickets for each sector in the contract
+      const firstVisitDate = addDays(now, values.frequencyDays);
+
       for (const sectorId of values.sectorIds) {
           const ticketRef = doc(collection(db, "external-tickets"));
           const newTicketData: Omit<ExternalTicket, 'id'> = {
@@ -112,16 +116,17 @@ export default function ContractsPage() {
                 name: client.name,
                 phone: client.phone,
                 address: `${client.address.street}, ${client.address.number || 'S/N'}`,
-                isWhats: false, // Pode ser um padrão ou vir do form
+                isWhats: false,
               },
               requesterName: 'Sistema (Criação de Contrato)',
               sectorId: sectorId,
               creatorId: user.id,
-              description: `Chamado inicial de manutenção preventiva (Contrato ${contractRef.id.substring(0, 5)}).`,
-              type: 'contrato',
-              status: 'pendente',
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
+              description: `Primeiro agendamento de manutenção preventiva (Contrato ${contractRef.id.substring(0, 5)}).`,
+              type: 'agendado',
+              status: 'pendente', // Starts as pending, but scheduled
+              scheduledTo: firstVisitDate.toISOString(),
+              createdAt: now.toISOString(),
+              updatedAt: now.toISOString(),
           };
           batch.set(ticketRef, newTicketData);
       }
@@ -129,8 +134,8 @@ export default function ContractsPage() {
       await batch.commit();
       
       toast({
-        title: "Contrato e chamados iniciais criados!",
-        description: `O contrato para ${client.name} e os chamados preventivos foram gerados.`,
+        title: "Contrato e chamados iniciais agendados!",
+        description: `O contrato para ${client.name} e os primeiros chamados preventivos foram gerados e agendados.`,
       });
       setIsNewDialogOpen(false);
 
