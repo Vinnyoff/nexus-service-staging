@@ -259,43 +259,41 @@ const ActionsCell: React.FC<ActionsCellProps> = ({ row, onEdit, onEditPermission
 
   return (
     <>
-      <div onClick={(e) => e.stopPropagation()}>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0" onClick={(e) => e.stopPropagation()}>
-              <span className="sr-only">Abrir menu</span>
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Ações</DropdownMenuLabel>
-             <DropdownMenuItem onClick={handleViewDetailsClick}>
-              Ver Detalhes
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={handleCopyIdClick}
-            >
-              Copiar ID
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleEditClick}>
-                Editar Técnico
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={handlePermissionsClick} disabled={technician.status !== 'active'}>
-                Editar Permissões
-            </DropdownMenuItem>
-            {technician.status === 'active' ? (
-                <DropdownMenuItem onClick={(e) => handleActionClick(e, 'deactivate')} className="text-destructive focus:text-destructive">
-                    Desativar
-                </DropdownMenuItem>
-            ) : (
-                 <DropdownMenuItem onClick={(e) => handleActionClick(e, 'activate')}>
-                    Reativar
-                </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" className="h-8 w-8 p-0" onClick={(e) => e.stopPropagation()}>
+            <span className="sr-only">Abrir menu</span>
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+          <DropdownMenuLabel>Ações</DropdownMenuLabel>
+            <DropdownMenuItem onClick={handleViewDetailsClick}>
+            Ver Detalhes
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={handleCopyIdClick}
+          >
+            Copiar ID
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={handleEditClick}>
+              Editar Técnico
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handlePermissionsClick} disabled={technician.status !== 'active'}>
+              Editar Permissões
+          </DropdownMenuItem>
+          {technician.status === 'active' ? (
+              <DropdownMenuItem onClick={(e) => handleActionClick(e, 'deactivate')} className="text-destructive focus:text-destructive">
+                  Desativar
+              </DropdownMenuItem>
+          ) : (
+                <DropdownMenuItem onClick={(e) => handleActionClick(e, 'activate')}>
+                  Reativar
+              </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
        <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
             <AlertDialogContent onClick={(e) => e.stopPropagation()}>
               <AlertDialogHeader>

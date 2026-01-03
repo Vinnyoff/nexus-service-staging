@@ -286,7 +286,7 @@ const ActionsCell = ({ row, currentUser, onEdit, onEditPermissions, onStatusChan
             <MoreHorizontal className="h-4 w-4" />
             </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
             <DropdownMenuLabel>Ações</DropdownMenuLabel>
             <DropdownMenuItem onClick={handleViewDetailsClick}>Ver Detalhes</DropdownMenuItem>
             <DropdownMenuItem onClick={handleCopyIdClick}>

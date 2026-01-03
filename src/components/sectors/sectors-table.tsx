@@ -50,17 +50,24 @@ const ActionsCell = ({ row, onEdit, onStatusChange }: { row: any, onEdit: (secto
   const [isAlertOpen, setIsAlertOpen] = React.useState(false);
   const [actionType, setActionType] = React.useState<'activate' | 'archive' | null>(null);
 
-  const handleActionClick = (type: 'activate' | 'archive') => {
+  const handleActionClick = (e: React.MouseEvent, type: 'activate' | 'archive') => {
+    e.stopPropagation();
     setActionType(type);
     setIsAlertOpen(true);
   }
 
-  const handleConfirmAction = () => {
+  const handleConfirmAction = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (actionType) {
       onStatusChange(sector, actionType === 'activate' ? 'active' : 'archived');
     }
     setIsAlertOpen(false);
   }
+  
+  const handleEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onEdit(sector);
+  };
 
   return (
     <>
@@ -71,28 +78,28 @@ const ActionsCell = ({ row, onEdit, onStatusChange }: { row: any, onEdit: (secto
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
           <DropdownMenuLabel>Ações</DropdownMenuLabel>
           <DropdownMenuItem
-            onClick={() => navigator.clipboard.writeText(sector.id)}
+            onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(sector.id)}}
           >
             Copiar ID
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => onEdit(sector)}>Editar</DropdownMenuItem>
+          <DropdownMenuItem onClick={handleEditClick}>Editar</DropdownMenuItem>
           {sector.status === 'active' ? (
-            <DropdownMenuItem onClick={() => handleActionClick('archive')} className="text-destructive focus:text-destructive">
+            <DropdownMenuItem onClick={(e) => handleActionClick(e, 'archive')} className="text-destructive focus:text-destructive">
               Arquivar
             </DropdownMenuItem>
           ) : (
-            <DropdownMenuItem onClick={() => handleActionClick('activate')}>
+            <DropdownMenuItem onClick={(e) => handleActionClick(e, 'activate')}>
               Reativar
             </DropdownMenuItem>
           )}
         </DropdownMenuContent>
       </DropdownMenu>
       <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
           <AlertDialogHeader>
             <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -100,7 +107,7 @@ const ActionsCell = ({ row, onEdit, onStatusChange }: { row: any, onEdit: (secto
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmAction}>Confirmar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
