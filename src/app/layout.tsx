@@ -7,7 +7,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 export const metadata: Metadata = {
   title: 'Nexus Service',
   description: 'Sistema completo de gestão Nexus Service',
-  manifest: "/manifest.webmanifest",
+  manifest: "/manifest.json",
 };
 
 export default function RootLayout({
