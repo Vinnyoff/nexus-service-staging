@@ -435,7 +435,7 @@ export function TechniciansTable({ data, sectors, onSavePermissions, onStatusCha
   }
 
   const handleRowDoubleClick = (row: any) => {
-    handleEdit(row.original);
+    handleEditPermissions(row.original);
   }
 
   React.useEffect(() => {
