@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect } from 'react';
@@ -106,14 +107,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   <p>&copy; {new Date().getFullYear()} Euroinfo</p>
                   <p>
                       Desenvolvido por{' '}
-                      <Link
-                      href="https://incodev.com.br"
+                      <span className="font-semibold text-foreground">
+                      Incode Dev
+                      </span>
+                  </p>
+                   <Link
+                      href="https://wa.me/5569981003976"
                       target="_blank"
                       className="font-semibold text-foreground hover:underline"
                       >
-                      Incode Dev
-                      </Link>
-                  </p>
+                      +55 69 98100-3976
+                    </Link>
               </div>
           </SidebarFooter>
         </Sidebar>
