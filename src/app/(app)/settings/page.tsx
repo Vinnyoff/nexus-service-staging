@@ -20,10 +20,11 @@ import { useToast } from '@/hooks/use-toast';
 import { storage, db } from '@/firebase/config';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { doc, updateDoc } from 'firebase/firestore';
-import { ClipboardList, Loader2, Map, Wrench, LayoutGrid, Calendar, CalendarCheck, History, LineChart, MapPinned } from 'lucide-react';
+import { ClipboardList, Loader2, Map, Wrench, LayoutGrid, Calendar, CalendarCheck, History, LineChart, MapPinned, CheckCircle } from 'lucide-react';
 import { getAuth, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import type { MobileNavPreferences } from '@/lib/types';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useDebounce } from '@/hooks/use-debounce';
 
 const profileFormSchema = z.object({
   name: z.string().min(2, { message: "O nome deve ter pelo menos 2 caracteres." }),
@@ -66,6 +67,7 @@ export default function SettingsPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isSavingNav, setIsSavingNav] = useState(false);
 
   const profileForm = useForm<ProfileFormValues>({
     resolver: zodResolver(profileFormSchema),
@@ -89,6 +91,14 @@ export default function SettingsPage() {
         reports: user?.mobileNavPreferences?.reports ?? false,
     }
   });
+
+  const mobileNavFormValues = mobileNavForm.watch();
+
+  useDebounce(() => {
+    if (mobileNavForm.formState.isDirty) {
+        onMobileNavSubmit(mobileNavFormValues);
+    }
+  }, 1000, [mobileNavFormValues, mobileNavForm.formState.isDirty]);
   
   useEffect(() => {
     if (user) {
@@ -209,17 +219,19 @@ export default function SettingsPage() {
 
   async function onMobileNavSubmit(values: MobileNavFormValues) {
     if (!user) return;
-
+    setIsSavingNav(true);
     const userDocRef = doc(db, "users", user.id);
     try {
       const preferencesToSave: MobileNavPreferences = { ...values };
 
       await updateDoc(userDocRef, { mobileNavPreferences: preferencesToSave });
       setUser((prev) => (prev ? { ...prev, mobileNavPreferences: preferencesToSave } : null));
-      toast({ title: "Preferências salvas!", description: "Seu menu de navegação mobile foi atualizado." });
     } catch (error) {
       console.error("Error updating mobile nav preferences:", error);
       toast({ variant: 'destructive', title: 'Erro ao salvar', description: 'Não foi possível salvar suas preferências.' });
+    } finally {
+        mobileNavForm.reset(values); // Mark form as pristine
+        setTimeout(() => setIsSavingNav(false), 500); // Keep saved state for a moment
     }
   }
 
@@ -470,14 +482,22 @@ export default function SettingsPage() {
         <TabsContent value="mobile">
           <Card>
             <CardHeader>
-              <CardTitle>Navegação Mobile</CardTitle>
-              <CardDescription>
-                Escolha quais itens aparecerão na barra de navegação inferior no seu celular.
-              </CardDescription>
+                <div className="flex justify-between items-center">
+                    <div>
+                        <CardTitle>Navegação Mobile</CardTitle>
+                        <CardDescription>
+                            Escolha quais itens aparecerão na barra de navegação inferior no seu celular.
+                        </CardDescription>
+                    </div>
+                     <div className="flex items-center text-sm text-muted-foreground transition-opacity duration-300">
+                        {isSavingNav && !mobileNavForm.formState.isDirty && <CheckCircle className="mr-2 h-4 w-4 text-green-500"/>}
+                        {isSavingNav ? 'Salvando...' : !mobileNavForm.formState.isDirty ? 'Salvo' : ''}
+                    </div>
+                </div>
             </CardHeader>
             <CardContent>
                <Form {...mobileNavForm}>
-                <form onSubmit={mobileNavForm.handleSubmit(onMobileNavSubmit)} className="space-y-8">
+                <form className="space-y-8">
                   <div className='space-y-4'>
                     {filteredMobileNavOptions.map((option) => (
                         <FormField
@@ -502,11 +522,6 @@ export default function SettingsPage() {
                         />
                     ))}
                   </div>
-                  
-                  <Button type="submit" disabled={mobileNavForm.formState.isSubmitting}>
-                    {mobileNavForm.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
-                    Salvar Preferências Mobile
-                  </Button>
                 </form>
               </Form>
             </CardContent>
@@ -517,5 +532,7 @@ export default function SettingsPage() {
     </>
   );
 }
+
+    
 
     
