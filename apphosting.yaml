@@ -5,3 +5,11 @@ runConfig:
   # Increase this value if you'd like to automatically spin up
   # more instances in response to increased traffic.
   maxInstances: 1
+
+# Defines a scheduled job that triggers the preventive maintenance ticket generation.
+scheduledJobs:
+  - id: daily-preventive-maintenance
+    schedule: "every day 05:00"
+    timeZone: "America/Sao_Paulo"
+    httpTarget:
+      uri: /api/cron
