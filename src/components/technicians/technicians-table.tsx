@@ -251,6 +251,12 @@ const ActionsCell: React.FC<ActionsCellProps> = ({ row, onEdit, onEditPermission
     onViewDetails(technician);
   }
 
+  const handleCopyIdClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(technician.id);
+  };
+
+
   return (
     <>
       <div onClick={(e) => e.stopPropagation()}>
@@ -267,7 +273,7 @@ const ActionsCell: React.FC<ActionsCellProps> = ({ row, onEdit, onEditPermission
               Ver Detalhes
             </DropdownMenuItem>
             <DropdownMenuItem
-              onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(technician.id); }}
+              onClick={handleCopyIdClick}
             >
               Copiar ID
             </DropdownMenuItem>
@@ -291,7 +297,7 @@ const ActionsCell: React.FC<ActionsCellProps> = ({ row, onEdit, onEditPermission
         </DropdownMenu>
       </div>
        <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
-            <AlertDialogContent>
+            <AlertDialogContent onClick={(e) => e.stopPropagation()}>
               <AlertDialogHeader>
                   <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
                   <AlertDialogDescription>

@@ -242,17 +242,39 @@ const ActionsCell = ({ row, currentUser, onEdit, onEditPermissions, onStatusChan
   
   const canManage = !isGerenteManagingGerente && !isAdminManagingAdmin && !isSelf;
   
-  const handleActionClick = (type: 'activate' | 'deactivate') => {
+  const handleActionClick = (e: React.MouseEvent, type: 'activate' | 'deactivate') => {
+    e.stopPropagation();
     setActionType(type);
     setIsAlertOpen(true);
   }
   
-  const handleConfirmAction = () => {
+  const handleConfirmAction = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (actionType) {
       onStatusChange(user, actionType === 'activate' ? 'active' : 'inactive');
     }
     setIsAlertOpen(false);
   }
+
+  const handleEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onEdit(user);
+  };
+
+  const handlePermissionsClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onEditPermissions(user);
+  };
+
+  const handleViewDetailsClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onViewDetails(user);
+  };
+
+  const handleCopyIdClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(user.id);
+  };
 
   return (
     <>
@@ -266,24 +288,24 @@ const ActionsCell = ({ row, currentUser, onEdit, onEditPermissions, onStatusChan
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
             <DropdownMenuLabel>Ações</DropdownMenuLabel>
-            <DropdownMenuItem onClick={() => onViewDetails(user)}>Ver Detalhes</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigator.clipboard.writeText(user.id)}>
+            <DropdownMenuItem onClick={handleViewDetailsClick}>Ver Detalhes</DropdownMenuItem>
+            <DropdownMenuItem onClick={handleCopyIdClick}>
               Copiar ID
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => onEdit(user)} disabled={!canManage}>
+            <DropdownMenuItem onClick={handleEditClick} disabled={!canManage}>
                 Editar Usuário
             </DropdownMenuItem>
-             <DropdownMenuItem onClick={() => onEditPermissions(user)} disabled={!canManage}>
+             <DropdownMenuItem onClick={handlePermissionsClick} disabled={!canManage}>
                 Editar Permissões
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             {user.status === 'active' ? (
-                <DropdownMenuItem onClick={() => handleActionClick('deactivate')} disabled={!canManage} className="text-destructive focus:text-destructive">
+                <DropdownMenuItem onClick={(e) => handleActionClick(e, 'deactivate')} disabled={!canManage} className="text-destructive focus:text-destructive">
                     Desativar
                 </DropdownMenuItem>
             ) : (
-                <DropdownMenuItem onClick={() => handleActionClick('activate')} disabled={!canManage}>
+                <DropdownMenuItem onClick={(e) => handleActionClick(e, 'activate')} disabled={!canManage}>
                     Reativar
                 </DropdownMenuItem>
             )}
@@ -291,7 +313,7 @@ const ActionsCell = ({ row, currentUser, onEdit, onEditPermissions, onStatusChan
         </DropdownMenu>
       </div>
          <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
-            <AlertDialogContent>
+            <AlertDialogContent onClick={(e) => e.stopPropagation()}>
             <AlertDialogHeader>
                 <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
                 <AlertDialogDescription>
@@ -299,7 +321,7 @@ const ActionsCell = ({ row, currentUser, onEdit, onEditPermissions, onStatusChan
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancelar</AlertDialogCancel>
                 <AlertDialogAction onClick={handleConfirmAction}>Confirmar</AlertDialogAction>
             </AlertDialogFooter>
             </AlertDialogContent>
@@ -501,7 +523,7 @@ export function UsersTable({ data, sectors, onSaveUser, onSavePermissions, onSta
                   className="cursor-pointer"
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} onClick={(e) => { if(cell.column.id === 'actions') { e.stopPropagation(); }}}>
+                    <TableCell key={cell.id} onClick={(e) => { if (cell.column.id === 'actions') { e.stopPropagation(); }}}>
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()

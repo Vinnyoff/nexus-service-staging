@@ -52,11 +52,13 @@ const ActionsCell = ({ row, onStatusChange, onEdit, onViewDetails }: { row: any,
   const [actionType, setActionType] = React.useState<ActionType | null>(null);
 
   const handleActionClick = (e: React.MouseEvent, type: ActionType) => {
+    e.stopPropagation();
     setActionType(type);
     setIsAlertOpen(true);
   }
 
   const handleConfirmAction = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (actionType) {
       onStatusChange(client, actionType === 'activate' ? 'active' : 'inactive');
     }
@@ -64,8 +66,20 @@ const ActionsCell = ({ row, onStatusChange, onEdit, onViewDetails }: { row: any,
   }
   
   const handleEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
     onEdit(client);
   }
+
+  const handleViewDetailsClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onViewDetails(client);
+  };
+
+  const handleCopyIdClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(client.id);
+  };
+
 
   return (
     <>
@@ -79,9 +93,9 @@ const ActionsCell = ({ row, onStatusChange, onEdit, onViewDetails }: { row: any,
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Ações</DropdownMenuLabel>
-            <DropdownMenuItem onClick={() => onViewDetails(client)}>Ver Detalhes</DropdownMenuItem>
+            <DropdownMenuItem onClick={handleViewDetailsClick}>Ver Detalhes</DropdownMenuItem>
             <DropdownMenuItem
-              onClick={() => { navigator.clipboard.writeText(client.id); }}
+              onClick={handleCopyIdClick}
             >
               Copiar ID
             </DropdownMenuItem>
@@ -100,7 +114,7 @@ const ActionsCell = ({ row, onStatusChange, onEdit, onViewDetails }: { row: any,
         </DropdownMenu>
       </div>
        <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
           <AlertDialogHeader>
             <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -108,7 +122,7 @@ const ActionsCell = ({ row, onStatusChange, onEdit, onViewDetails }: { row: any,
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmAction}>Confirmar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -285,7 +299,7 @@ export function ClientsTable({ data, onStatusChange, onUpdateClient }: ClientsTa
                   className="cursor-pointer"
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell key={cell.id} onClick={(e) => { if(cell.column.id === 'actions') { e.stopPropagation(); }}}>
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()
