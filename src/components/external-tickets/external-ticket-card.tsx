@@ -180,7 +180,7 @@ export function ExternalTicketCard({
                     <TooltipProvider>
                         <Tooltip>
                             <TooltipTrigger>
-                                <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                                <MessageSquare className="h-5 w-5 text-primary fill-primary/20" />
                             </TooltipTrigger>
                             <TooltipContent>
                                 <p>Este chamado possui comentários.</p>
