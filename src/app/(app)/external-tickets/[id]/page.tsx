@@ -171,7 +171,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
             ...(finalSignatureUrl && { signature: finalSignatureUrl }),
         };
 
-        // A lógica de criação do próximo chamado foi removida daqui e movida para um cron job.
+        // A lógica de criação do próximo chamado foi movida daqui e movida para um cron job.
         // A função agora apenas finaliza o chamado atual.
         await updateDoc(ticketRef, {
             status: 'concluído',
