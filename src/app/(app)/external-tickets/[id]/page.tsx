@@ -171,6 +171,8 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
             ...(finalSignatureUrl && { signature: finalSignatureUrl }),
         };
 
+        // A lógica de criação do próximo chamado foi removida daqui e movida para um cron job.
+        // A função agora apenas finaliza o chamado atual.
         await updateDoc(ticketRef, {
             status: 'concluído',
             updatedAt: finalizationTime,
@@ -181,70 +183,6 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
             }
         });
         
-        // Se o chamado for do tipo 'contrato', cria o próximo chamado preventivo
-        if (ticket.type === 'contrato') {
-            const contractsRef = collection(db, "serviceContracts");
-            const q = query(
-                contractsRef, 
-                where('clientId', '==', ticket.client.id), 
-                where('sectorIds', 'array-contains', ticket.sectorId),
-                where('status', '==', 'active'),
-                limit(1)
-            );
-            const contractSnapshot = await getDocs(q);
-
-            if (!contractSnapshot.empty) {
-                const contractDoc = contractSnapshot.docs[0];
-                const contract = { id: contractDoc.id, ...contractDoc.data() } as ServiceContract;
-                
-                const clientDoc = await getDoc(doc(db, "clients", contract.clientId));
-                if (clientDoc.exists()) {
-                    const clientData = clientDoc.data();
-                    const nextVisitDate = addDays(new Date(), contract.frequencyDays);
-                    
-                    const newTicketData: Omit<ExternalTicket, 'id'> = {
-                        client: {
-                            id: contract.clientId,
-                            name: clientData.name,
-                            phone: clientData.phone,
-                            address: (clientData.address && clientData.address.street) 
-                                ? `${clientData.address.street}, ${clientData.address.number || 'S/N'}` 
-                                : undefined,
-                            isWhats: false, 
-                        },
-                        requesterName: 'Sistema (Preventiva Automática)',
-                        sectorId: ticket.sectorId,
-                        creatorId: 'system',
-                        description: "Manutenção preventiva de contrato",
-                        type: 'contrato',
-                        status: 'pendente',
-                        createdAt: new Date().toISOString(),
-                        updatedAt: new Date().toISOString(),
-                        scheduledTo: nextVisitDate.toISOString(),
-                        technicianId: null,
-                        comments: [],
-                        technicalReport: null,
-                        checkIn: null,
-                        checkOut: null,
-                        enRoute: null,
-                        enRouteAt: null,
-                        slaExpiresAt: null,
-                    };
-
-                    await addDoc(collection(db, "external-tickets"), newTicketData);
-                    
-                    toast({
-                        title: 'Próxima Preventiva Agendada!',
-                        description: `O próximo chamado para ${clientData.name} foi criado para ${format(nextVisitDate, 'dd/MM/yyyy')}.`,
-                    });
-                } else {
-                     console.warn(`Cliente ${contract.clientId} do contrato ${contract.id} não encontrado. Próximo chamado não foi criado.`);
-                }
-            } else {
-                 console.warn(`Contrato ativo para o cliente ${ticket.client.id} no setor ${ticket.sectorId} não encontrado. Próximo chamado não foi criado.`);
-            }
-        }
-
         const sector = allSectors.find(s => s.id === ticket.sectorId);
         if (sector?.whatsappGroupId) {
             const finalizationDate = format(parseISO(finalizationTime), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
@@ -261,7 +199,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
         toast({
             variant: "destructive",
             title: "Erro ao finalizar chamado",
-            description: "Não foi possível salvar os dados ou agendar o próximo chamado. Verifique o console para mais detalhes.",
+            description: "Não foi possível salvar os dados. Verifique o console para mais detalhes.",
         });
         return false;
     }

@@ -2,7 +2,7 @@
 // Este arquivo contém a lógica que será usada em uma Cloud Function para
 // automatizar a criação de chamados de manutenção preventiva.
 
-import { collection, getDocs, addDoc, query, where, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, addDoc, query, where, orderBy, limit, doc, getDoc } from 'firebase/firestore';
 import { db } from '@/firebase/config';
 import { Client, ExternalTicket, ServiceContract } from '@/lib/types';
 import { differenceInDays, parseISO } from 'date-fns';
@@ -44,7 +44,11 @@ export async function generatePreventiveTickets() {
   const contractsSnapshot = await getDocs(q);
   if (contractsSnapshot.empty) {
     console.log('Nenhum contrato de serviço ativo encontrado.');
-    return;
+    return {
+        message: 'Nenhum contrato de serviço ativo encontrado.',
+        createdTicketsCount: 0,
+        checkedContractsCount: 0,
+    };
   }
 
   const today = new Date();
@@ -55,24 +59,28 @@ export async function generatePreventiveTickets() {
     
     const clientDoc = await getDoc(doc(db, "clients", contract.clientId));
     if (!clientDoc.exists()) continue;
-    const client = { id: clientDoc.id, ...clientDoc.data() } as Client;
+    const clientData = clientDoc.data() as Client;
 
     for (const sectorId of contract.sectorIds) {
-      const lastTicket = await findLastPreventiveTicket(client.id, sectorId);
+      const lastTicket = await findLastPreventiveTicket(clientData.id, sectorId);
       
-      const lastVisitDate = lastTicket ? parseISO(lastTicket.updatedAt) : new Date(0);
-      const daysSinceLastVisit = differenceInDays(today, lastVisitDate);
+      // Se não houver nenhum chamado anterior (primeira preventiva após o inicial),
+      // use a data de criação do contrato como base.
+      const lastEventDate = lastTicket?.updatedAt ? parseISO(lastTicket.updatedAt) : parseISO(contract.createdAt);
+      const daysSinceLastEvent = differenceInDays(today, lastEventDate);
 
-      if (daysSinceLastVisit >= contract.frequencyDays) {
-        console.log(`Gerando chamado preventivo para ${client.name} no setor ${sectorId}.`);
+      if (daysSinceLastEvent >= contract.frequencyDays) {
+        console.log(`Gerando chamado preventivo para ${clientData.name} no setor ${sectorId}.`);
 
         const newTicketData: Omit<ExternalTicket, 'id'> = {
           client: {
-            id: client.id,
-            name: client.name,
-            phone: client.phone,
+            id: clientData.id,
+            name: clientData.name,
+            phone: clientData.phone,
             isWhats: false, // Pode ser ajustado conforme necessário
-            address: client.address ? `${client.address.street}, ${client.address.number || 'S/N'}` : undefined,
+            address: (clientData.address && clientData.address.street) 
+                ? `${clientData.address.street}, ${clientData.address.number || 'S/N'}` 
+                : undefined,
           },
           requesterName: 'Sistema (Preventiva Automática)',
           sectorId: sectorId,
@@ -82,6 +90,14 @@ export async function generatePreventiveTickets() {
           status: 'pendente',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
+          technicianId: null,
+          comments: [],
+          technicalReport: null,
+          checkIn: null,
+          checkOut: null,
+          enRoute: null,
+          enRouteAt: null,
+          slaExpiresAt: null,
         };
 
         try {
@@ -89,7 +105,7 @@ export async function generatePreventiveTickets() {
           createdTickets.push(docRef.id);
           console.log(`Chamado ${docRef.id} criado com sucesso.`);
         } catch (error) {
-          console.error(`Falha ao criar chamado para o cliente ${client.id} e setor ${sectorId}:`, error);
+          console.error(`Falha ao criar chamado para o cliente ${clientData.id} e setor ${sectorId}:`, error);
         }
       }
     }
