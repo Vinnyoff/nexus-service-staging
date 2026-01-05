@@ -397,3 +397,5 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
     </>
   );
 }
+
+    
