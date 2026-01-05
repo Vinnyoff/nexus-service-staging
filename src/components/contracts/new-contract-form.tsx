@@ -60,6 +60,8 @@ export function NewContractForm({ clients, sectors, onSave, onFinished }: NewCon
     setIsSaving(false);
   }
 
+  const sortedClients = [...clients].sort((a, b) => a.name.localeCompare(b.name));
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -96,7 +98,7 @@ export function NewContractForm({ clients, sectors, onSave, onFinished }: NewCon
                             <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
                             <CommandGroup>
                                 <CommandList>
-                                {clients.map((client) => (
+                                {sortedClients.map((client) => (
                                     <CommandItem
                                         value={client.name}
                                         key={client.id}
