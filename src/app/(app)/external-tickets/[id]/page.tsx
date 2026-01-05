@@ -182,7 +182,6 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
             }
         });
         
-        // --- Lógica de renovação de contrato ---
         if (ticket.type === 'contrato') {
             const contractsRef = collection(db, "serviceContracts");
             const q = query(
