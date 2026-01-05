@@ -208,7 +208,9 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
                             id: contract.clientId,
                             name: clientData.name,
                             phone: clientData.phone,
-                            address: clientData.address ? `${clientData.address.street}, ${clientData.address.number || 'S/N'}` : undefined,
+                            address: (clientData.address && clientData.address.street) 
+                                ? `${clientData.address.street}, ${clientData.address.number || 'S/N'}` 
+                                : undefined,
                             isWhats: false, 
                         },
                         requesterName: 'Sistema (Preventiva Automática)',
