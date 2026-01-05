@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react';
 import type { Comment, ExternalTicket, User, Sector, Technician, TechnicalReport, ServiceContract } from '@/lib/types';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
-import { doc, onSnapshot, updateDoc, arrayUnion, collection, getDocs, deleteField, query, where, limit, addDoc } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, arrayUnion, collection, getDocs, deleteField, query, where, limit, addDoc, getDoc } from 'firebase/firestore';
 import { db, storage } from '@/firebase/config';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { sendWhatsappMessage } from '@/lib/services/notification-service';
@@ -150,10 +150,8 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
 
     const finalizationTime = new Date().toISOString();
     const ticketRef = doc(db, "external-tickets", id);
-    const sector = allSectors.find(s => s.id === ticket.sectorId);
     
     try {
-        
         const photoURLs = await Promise.all(
             photos.map(async (photo) => {
                 const optimizedPhoto = await optimizeImage(photo);
@@ -196,31 +194,52 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
             const contractSnapshot = await getDocs(q);
 
             if (!contractSnapshot.empty) {
-                const contract = contractSnapshot.docs[0].data() as ServiceContract;
-                const nextVisitDate = addDays(new Date(), contract.frequencyDays);
+                const contractDoc = contractSnapshot.docs[0];
+                const contract = { id: contractDoc.id, ...contractDoc.data() } as ServiceContract;
                 
-                const newTicketData: Omit<ExternalTicket, 'id'> = {
-                    ...ticket,
-                    description: `Manutenção preventiva programada (Contrato ${contract.id.substring(0,5)})`,
-                    type: 'contrato',
-                    status: 'pendente', // The new ticket starts as pending
-                    scheduledTo: nextVisitDate.toISOString(),
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                    creatorId: 'system',
-                    technicianId: undefined, // Unassign technician
-                    comments: [],
-                    technicalReport: undefined,
-                    checkIn: undefined,
-                    checkOut: undefined,
-                    enRoute: undefined,
-                    enRouteAt: undefined,
-                };
-                await addDoc(collection(db, "external-tickets"), newTicketData);
+                // Fetch the full client data to ensure address is current
+                const clientDoc = await getDoc(doc(db, "clients", contract.clientId));
+                if (clientDoc.exists()) {
+                    const clientData = clientDoc.data();
+
+                    const nextVisitDate = addDays(new Date(), contract.frequencyDays);
+                    
+                    const newTicketData: Omit<ExternalTicket, 'id'> = {
+                        client: {
+                            id: contract.clientId,
+                            name: clientData.name,
+                            phone: clientData.phone,
+                            address: clientData.address ? `${clientData.address.street}, ${clientData.address.number || 'S/N'}` : undefined,
+                            isWhats: ticket.client.isWhats,
+                        },
+                        requesterName: 'Sistema (Preventiva Automática)',
+                        sectorId: ticket.sectorId, // Use the same sector as the completed ticket
+                        creatorId: 'system',
+                        description: `Manutenção preventiva programada (Contrato ${contract.id.substring(0,5)})`,
+                        type: 'contrato',
+                        status: 'pendente',
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                        scheduledTo: nextVisitDate.toISOString(),
+                        // Explicitly clear fields that should not be carried over
+                        technicianId: undefined,
+                        comments: [],
+                        technicalReport: undefined,
+                        checkIn: undefined,
+                        checkOut: undefined,
+                        enRoute: undefined,
+                        enRouteAt: undefined,
+                    };
+                    await addDoc(collection(db, "external-tickets"), newTicketData);
+                    toast({
+                        title: 'Próxima Preventiva Agendada!',
+                        description: `O próximo chamado para ${clientData.name} foi criado para ${format(nextVisitDate, 'dd/MM/yyyy')}.`,
+                    });
+                }
             }
         }
 
-
+        const sector = allSectors.find(s => s.id === ticket.sectorId);
         if (sector?.whatsappGroupId) {
             const finalizationDate = format(parseISO(finalizationTime), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
             const message = `✅ Chamado Concluido ✅\n\n*Cliente:* ${ticket.client.name}\n*Finalizado em:* ${finalizationDate}\n*Status:* Concluído por ${user.name}`;
@@ -236,7 +255,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
         toast({
             variant: "destructive",
             title: "Erro ao finalizar chamado",
-            description: "Não foi possível salvar o relatório técnico ou enviar a notificação. Verifique as permissões e tente novamente.",
+            description: "Não foi possível salvar os dados ou agendar o próximo chamado. Verifique o console para mais detalhes.",
         });
         return false;
     }
