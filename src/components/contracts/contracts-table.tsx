@@ -148,6 +148,11 @@ export function ContractsTable({ data, sectors, onStatusChange, onUpdateContract
         cell: ({ row }) => <div className="capitalize">{row.getValue("clientName")}</div>,
       },
       {
+        accessorKey: "description",
+        header: "Descrição",
+        cell: ({ row }) => <div className="text-muted-foreground truncate max-w-xs">{row.getValue("description") || 'N/A'}</div>,
+      },
+      {
         accessorKey: "frequencyDays",
         header: "Frequência",
         cell: ({ row }) => <div>{row.getValue("frequencyDays")} dias</div>,

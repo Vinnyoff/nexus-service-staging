@@ -20,8 +20,10 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
+import { Textarea } from "../ui/textarea";
 
 const formSchema = z.object({
+  description: z.string().optional(),
   frequencyDays: z.coerce.number().positive({ message: "A frequência deve ser maior que zero." }),
   sectorIds: z.array(z.string()).min(1, { message: "Selecione pelo menos um setor." }),
 });
@@ -41,6 +43,7 @@ export function EditContractForm({ contract, sectors, onSave, onFinished }: Edit
   const form = useForm<EditContractFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+        description: contract.description || "",
         frequencyDays: contract.frequencyDays,
         sectorIds: contract.sectorIds,
     },
@@ -56,6 +59,19 @@ export function EditContractForm({ contract, sectors, onSave, onFinished }: Edit
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-4">
+            <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Descrição (Opcional)</FormLabel>
+                    <FormControl>
+                    <Textarea placeholder="Ex: Contrato de Impressoras, Contrato de Rede..." {...field} />
+                    </FormControl>
+                    <FormMessage />
+                </FormItem>
+                )}
+            />
             <FormField
                 control={form.control}
                 name="frequencyDays"

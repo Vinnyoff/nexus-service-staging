@@ -21,9 +21,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { Textarea } from "../ui/textarea";
 
 const formSchema = z.object({
   clientId: z.string({ required_error: "Selecione um cliente." }),
+  description: z.string().optional(),
   frequencyDays: z.coerce.number().positive({ message: "A frequência deve ser maior que zero." }),
   sectorIds: z.array(z.string()).min(1, { message: "Selecione pelo menos um setor." }),
 });
@@ -46,6 +48,7 @@ export function NewContractForm({ clients, sectors, onSave, onFinished }: NewCon
     resolver: zodResolver(formSchema),
     defaultValues: {
         clientId: undefined,
+        description: "",
         frequencyDays: 30,
         sectorIds: [],
     },
@@ -120,6 +123,20 @@ export function NewContractForm({ clients, sectors, onSave, onFinished }: NewCon
                     </Popover>
                     <FormMessage />
                     </FormItem>
+                )}
+            />
+
+             <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Descrição (Opcional)</FormLabel>
+                    <FormControl>
+                    <Textarea placeholder="Ex: Contrato de Impressoras, Contrato de Rede..." {...field} />
+                    </FormControl>
+                    <FormMessage />
+                </FormItem>
                 )}
             />
 

@@ -107,6 +107,7 @@ export interface ServiceContract {
   id: string;
   clientId: string;
   clientName: string;
+  description?: string;
   sectorIds: string[];
   frequencyDays: number;
   status: 'active' | 'inactive';
@@ -159,26 +160,26 @@ export interface ExternalTicket {
   requesterName?: string;
   sectorId: string;
   creatorId: string;
-  technicianId?: string;
+  technicianId?: string | null;
   description: string;
   type: 'padrão' | 'contrato' | 'urgente' | 'agendado' | 'retorno';
   status: 'pendente' | 'em andamento' | 'concluído' | 'cancelado';
   scheduledTo?: string;
   createdAt: string;
   updatedAt: string;
-  slaExpiresAt?: string;
+  slaExpiresAt?: string | null;
   checkIn?: {
     ticketId: string;
     timestamp: string;
-  };
+  } | null;
   checkOut?: {
     ticketId: string;
     timestamp: string;
-  };
-  enRoute?: boolean;
-  enRouteAt?: string;
+  } | null;
+  enRoute?: boolean | null;
+  enRouteAt?: string | null;
   comments?: Comment[];
-  technicalReport?: TechnicalReport;
+  technicalReport?: TechnicalReport | null;
 }
 
 export interface InternalTicket {

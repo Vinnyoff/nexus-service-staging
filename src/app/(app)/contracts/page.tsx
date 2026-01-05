@@ -86,6 +86,7 @@ export default function ContractsPage() {
       const newContractData: Omit<ServiceContract, 'id'> = {
         clientId: values.clientId,
         clientName: client.name,
+        description: values.description,
         sectorIds: values.sectorIds,
         frequencyDays: values.frequencyDays,
         status: 'active',
@@ -151,7 +152,7 @@ export default function ContractsPage() {
     const contractRef = doc(db, "serviceContracts", contractId);
     
     try {
-        const contractSnap = await doc(db, "serviceContracts", contractId).get();
+        const contractSnap = await getDoc(contractRef).get();
         const contractData = contractSnap.data() as ServiceContract;
         const clientRef = doc(db, "clients", contractData.clientId);
         
