@@ -64,7 +64,7 @@ export type NewExternalTicketFormValues = z.infer<typeof formSchema>;
 
 interface NewExternalTicketFormProps {
   onFinished: () => void;
-  onSave: (values: NewExternalTicketFormValues & { type: 'padrão' | 'contrato' | 'urgente' | 'agendado' | 'retorno', slaExpiresAt?: string }) => void;
+  onSave: (values: NewExternalTicketFormValues & { type: 'padrão' | 'contrato' | 'urgente' | 'agendado' | 'retorno', slaExpiresAt?: string }) => Promise<void>;
 }
 
 const steps = [
@@ -84,6 +84,8 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
     const [clients, setClients] = useState<Client[]>([]);
     const [openClientSelector, setOpenClientSelector] = useState(false);
     const [clientSearch, setClientSearch] = useState("");
+    const [isSaving, setIsSaving] = useState(false);
+
 
     // SLA State
     const [selectedClientSla, setSelectedClientSla] = useState<number | undefined>(undefined);
@@ -238,41 +240,50 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
         }
     }
 
-    function onSubmit(values: NewExternalTicketFormValues) {
-        let type: 'padrão' | 'contrato' | 'urgente' | 'agendado' | 'retorno' = 'padrão';
+    async function onSubmit(values: NewExternalTicketFormValues) {
+        setIsSaving(true);
+        try {
+            let type: 'padrão' | 'contrato' | 'urgente' | 'agendado' | 'retorno' = 'padrão';
 
-        if (values.scheduledToDate) {
-            type = 'agendado';
-        } else if (values.isUrgent) {
-            type = 'urgente';
-        } else if (values.isContract) {
-            type = 'contrato';
-        }
-
-        const finalValues: any = { ...values, type };
-        if (addressMode === 'none') {
-            finalValues.address = undefined;
-        } else if (addressMode === 'api') {
-            const client = clients.find(c => c.id === values.clientId);
-            if (client && client.address) {
-                finalValues.address = client.address;
+            if (values.scheduledToDate) {
+                type = 'agendado';
+            } else if (values.isUrgent) {
+                type = 'urgente';
+            } else if (values.isContract) {
+                type = 'contrato';
             }
-        }
 
-        let slaHours: number | undefined = undefined;
-        if (values.hasCustomSla && values.customSlaHours) {
-            slaHours = values.customSlaHours;
-        } else if (selectedClientSla) {
-            slaHours = selectedClientSla;
-        }
+            const finalValues: any = { ...values, type };
+            if (addressMode === 'none') {
+                finalValues.address = undefined;
+            } else if (addressMode === 'api') {
+                const client = clients.find(c => c.id === values.clientId);
+                if (client && client.address) {
+                    finalValues.address = client.address;
+                }
+            }
 
-        if (slaHours) {
-            const now = new Date();
-            finalValues.slaExpiresAt = addHours(now, slaHours).toISOString();
+            let slaHours: number | undefined = undefined;
+            if (values.hasCustomSla && values.customSlaHours) {
+                slaHours = values.customSlaHours;
+            } else if (selectedClientSla) {
+                slaHours = selectedClientSla;
+            }
+
+            if (slaHours) {
+                const now = new Date();
+                finalValues.slaExpiresAt = addHours(now, slaHours).toISOString();
+            }
+            
+            await onSave(finalValues);
+        } catch (error) {
+            console.error("An error occurred during save:", error);
+            // Toast is handled in the parent component
+        } finally {
+            setIsSaving(false);
         }
-        
-        onSave(finalValues);
     }
+
 
     const isAddressVisible = addressMode === 'manual';
 
@@ -777,7 +788,7 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
             <div className="flex justify-between gap-2 pt-4 border-t">
                 <div>
                   {currentStep > 1 && (
-                      <Button type="button" variant="outline" onClick={handlePreviousStep}>
+                      <Button type="button" variant="outline" onClick={handlePreviousStep} disabled={isSaving}>
                           <ArrowLeft className="mr-2 h-4 w-4" />
                           Anterior
                       </Button>
@@ -785,15 +796,18 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                 </div>
 
                 <div className="flex gap-2">
-                  <Button type="button" variant="ghost" onClick={onFinished}>Cancelar</Button>
+                  <Button type="button" variant="ghost" onClick={onFinished} disabled={isSaving}>Cancelar</Button>
                   {currentStep < 3 && (
-                      <Button type="button" onClick={handleNextStep}>
+                      <Button type="button" onClick={handleNextStep} disabled={isSaving}>
                           Próximo
                           <ArrowRight className="ml-2 h-4 w-4" />
                       </Button>
                   )}
                   {currentStep === 3 && (
-                      <Button type="submit">Salvar Chamado</Button>
+                      <Button type="submit" disabled={isSaving}>
+                          {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          {isSaving ? "Salvando..." : "Salvar Chamado"}
+                      </Button>
                   )}
                 </div>
             </div>

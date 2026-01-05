@@ -275,6 +275,8 @@ export default function ExternalTicketsPage() {
         title: "Erro ao criar chamado",
         description: "Ocorreu um erro ao salvar os dados. Tente novamente.",
       });
+      // Re-throw to inform the form
+      throw error;
     }
   }
   
@@ -645,7 +647,12 @@ export default function ExternalTicketsPage() {
             <DialogHeader>
             <DialogTitle>Novo Chamado Externo</DialogTitle>
             </DialogHeader>
-            <NewExternalTicketForm onFinished={() => setIsNewTicketDialogOpen(false)} onSave={handleAddTicket} />
+            <NewExternalTicketForm 
+                onFinished={() => setIsNewTicketDialogOpen(false)} 
+                onSave={async (values) => {
+                    await handleAddTicket(values);
+                }}
+            />
         </DialogContent>
 
         <div className="fixed bottom-20 md:bottom-6 right-6 z-50">
