@@ -182,7 +182,6 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
             }
         });
         
-        // Schedule next preventive ticket if this was a contract ticket
         if (ticket.type === 'contrato') {
             const contractsRef = collection(db, "serviceContracts");
             const q = query(
@@ -197,11 +196,9 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
                 const contractDoc = contractSnapshot.docs[0];
                 const contract = { id: contractDoc.id, ...contractDoc.data() } as ServiceContract;
                 
-                // Fetch the full client data to ensure address is current
                 const clientDoc = await getDoc(doc(db, "clients", contract.clientId));
                 if (clientDoc.exists()) {
                     const clientData = clientDoc.data();
-
                     const nextVisitDate = addDays(new Date(), contract.frequencyDays);
                     
                     const newTicketData: Omit<ExternalTicket, 'id'> = {
@@ -210,10 +207,10 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
                             name: clientData.name,
                             phone: clientData.phone,
                             address: clientData.address ? `${clientData.address.street}, ${clientData.address.number || 'S/N'}` : undefined,
-                            isWhats: ticket.client.isWhats,
+                            isWhats: false, 
                         },
                         requesterName: 'Sistema (Preventiva Automática)',
-                        sectorId: ticket.sectorId, // Use the same sector as the completed ticket
+                        sectorId: ticket.sectorId,
                         creatorId: 'system',
                         description: `Manutenção preventiva programada (Contrato ${contract.id.substring(0,5)})`,
                         type: 'contrato',
@@ -221,7 +218,6 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
                         createdAt: new Date().toISOString(),
                         updatedAt: new Date().toISOString(),
                         scheduledTo: nextVisitDate.toISOString(),
-                        // Explicitly clear fields that should not be carried over
                         technicianId: undefined,
                         comments: [],
                         technicalReport: undefined,
@@ -229,13 +225,20 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
                         checkOut: undefined,
                         enRoute: undefined,
                         enRouteAt: undefined,
+                        slaExpiresAt: undefined,
                     };
+
                     await addDoc(collection(db, "external-tickets"), newTicketData);
+                    
                     toast({
                         title: 'Próxima Preventiva Agendada!',
                         description: `O próximo chamado para ${clientData.name} foi criado para ${format(nextVisitDate, 'dd/MM/yyyy')}.`,
                     });
+                } else {
+                     console.warn(`Cliente ${contract.clientId} do contrato ${contract.id} não encontrado. Próximo chamado não foi criado.`);
                 }
+            } else {
+                 console.warn(`Contrato ativo para o cliente ${ticket.client.id} não encontrado. Próximo chamado não foi criado.`);
             }
         }
 
@@ -325,7 +328,6 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
         await sendWhatsappMessage(sectorGroupId, message);
       }
       
-      // Envia notificação web push para o próprio usuário
       await sendWhatsappMessage(user.phone, message, user.id, `/external-tickets/${ticket.id}`);
 
       toast({
@@ -394,3 +396,5 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
     </>
   );
 }
+
+    
