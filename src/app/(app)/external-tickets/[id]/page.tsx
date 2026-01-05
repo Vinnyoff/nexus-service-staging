@@ -161,7 +161,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
             })
         );
         
-        let finalSignatureUrl: string | undefined = undefined;
+        let finalSignatureUrl: string | null = null;
         if (signatureDataUrl) {
             finalSignatureUrl = await optimizeSignature(signatureDataUrl);
         }
@@ -182,7 +182,6 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
             }
         });
         
-        // Lógica de renovação do contrato
         if (ticket.type === 'contrato') {
             const contractsRef = collection(db, "serviceContracts");
             const q = query(
@@ -222,14 +221,14 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
                         createdAt: new Date().toISOString(),
                         updatedAt: new Date().toISOString(),
                         scheduledTo: nextVisitDate.toISOString(),
-                        technicianId: undefined,
+                        technicianId: null,
                         comments: [],
-                        technicalReport: undefined,
-                        checkIn: undefined,
-                        checkOut: undefined,
-                        enRoute: undefined,
-                        enRouteAt: undefined,
-                        slaExpiresAt: undefined,
+                        technicalReport: null,
+                        checkIn: null,
+                        checkOut: null,
+                        enRoute: null,
+                        enRouteAt: null,
+                        slaExpiresAt: null,
                     };
 
                     await addDoc(collection(db, "external-tickets"), newTicketData);
@@ -400,5 +399,3 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
     </>
   );
 }
-
-    
