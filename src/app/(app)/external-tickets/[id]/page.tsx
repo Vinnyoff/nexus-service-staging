@@ -182,6 +182,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
             }
         });
         
+        // Lógica de renovação do contrato
         if (ticket.type === 'contrato') {
             const contractsRef = collection(db, "serviceContracts");
             const q = query(
@@ -213,7 +214,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
                         requesterName: 'Sistema (Preventiva Automática)',
                         sectorId: ticket.sectorId,
                         creatorId: 'system',
-                        description: `Manutenção preventiva programada (Contrato ${contract.id.substring(0,5)})`,
+                        description: "Manutenção preventiva de contrato",
                         type: 'contrato',
                         status: 'pendente',
                         createdAt: new Date().toISOString(),
