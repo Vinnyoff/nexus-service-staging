@@ -180,7 +180,8 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
             checkOut: {
                 ticketId: id,
                 timestamp: finalizationTime,
-            }
+            },
+            technicianId: ticket.technicianId || null
         });
         
         const sector = allSectors.find(s => s.id === ticket.sectorId);
