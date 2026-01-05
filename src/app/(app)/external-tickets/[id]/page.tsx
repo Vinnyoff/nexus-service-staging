@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
@@ -182,6 +181,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
             }
         });
         
+        // Se o chamado for do tipo 'contrato', cria o próximo chamado preventivo
         if (ticket.type === 'contrato') {
             const contractsRef = collection(db, "serviceContracts");
             const q = query(
@@ -399,3 +399,5 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
     </>
   );
 }
+
+    
