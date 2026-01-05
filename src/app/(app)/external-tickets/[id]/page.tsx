@@ -182,11 +182,13 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
             }
         });
         
+        // --- Lógica de renovação de contrato ---
         if (ticket.type === 'contrato') {
             const contractsRef = collection(db, "serviceContracts");
             const q = query(
                 contractsRef, 
                 where('clientId', '==', ticket.client.id), 
+                where('sectorIds', 'array-contains', ticket.sectorId),
                 where('status', '==', 'active'),
                 limit(1)
             );
@@ -238,7 +240,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
                      console.warn(`Cliente ${contract.clientId} do contrato ${contract.id} não encontrado. Próximo chamado não foi criado.`);
                 }
             } else {
-                 console.warn(`Contrato ativo para o cliente ${ticket.client.id} não encontrado. Próximo chamado não foi criado.`);
+                 console.warn(`Contrato ativo para o cliente ${ticket.client.id} no setor ${ticket.sectorId} não encontrado. Próximo chamado não foi criado.`);
             }
         }
 
