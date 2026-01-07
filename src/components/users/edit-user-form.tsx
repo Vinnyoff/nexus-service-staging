@@ -21,13 +21,126 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Sector, User } from "@/lib/types";
+import { Sector, User, UserStatus, ModulePermissions } from "@/lib/types";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { cn } from "@/lib/utils";
 import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Separator } from "../ui/separator";
+import { Checkbox } from "../ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
 
+// --- In-file Permissions Form Component ---
+const permissionSchema = z.enum(['none', 'read', 'write']);
+const permissionsFormSchema = z.object({
+  dashboard: permissionSchema,
+  external_tickets: permissionSchema,
+  internal_tickets: permissionSchema,
+  routes: permissionSchema,
+  planning: permissionSchema,
+  location: permissionSchema,
+  reports: permissionSchema,
+  history: permissionSchema,
+  clients: permissionSchema,
+  technicians: permissionSchema,
+  monitoring: permissionSchema,
+});
+
+type PermissionsFormValues = z.infer<typeof permissionsFormSchema>;
+
+const moduleLabels: Record<keyof ModulePermissions, string> = {
+    dashboard: "Dashboard",
+    external_tickets: "Chamados Externos",
+    internal_tickets: "Atendimentos Internos",
+    routes: "Otimizar Rotas",
+    planning: "Planejamento",
+    location: "Localização",
+    reports: "Relatórios",
+    history: "Histórico",
+    clients: "Clientes",
+    technicians: "Técnicos",
+    monitoring: "Monitoramento",
+};
+
+const defaultEncarregadoPermissions: PermissionsFormValues = {
+    dashboard: 'read',
+    external_tickets: 'write',
+    internal_tickets: 'write',
+    routes: 'write',
+    planning: 'read',
+    location: 'write',
+    reports: 'read',
+    history: 'read',
+    clients: 'read',
+    technicians: 'read',
+    monitoring: 'none',
+};
+
+const defaultGerentePermissions: PermissionsFormValues = {
+    dashboard: 'write',
+    external_tickets: 'write',
+    internal_tickets: 'write',
+    routes: 'write',
+    planning: 'write',
+    location: 'write',
+    reports: 'write',
+    history: 'write',
+    clients: 'write',
+    technicians: 'write',
+    monitoring: 'write',
+};
+
+interface PermissionsSubFormProps {
+  form: any;
+  userRole: 'gerente' | 'encarregado' | 'vendedor';
+}
+
+function UserPermissionsSubForm({ form, userRole }: PermissionsSubFormProps) {
+    if (userRole === 'vendedor') return null;
+    return (
+        <div className="space-y-4 pt-4">
+             <h3 className="text-lg font-medium border-b pb-2 pt-4">Permissões do Módulo</h3>
+            {Object.keys(moduleLabels).map((moduleKey) => {
+                const key = moduleKey as keyof ModulePermissions;
+                if (userRole === 'encarregado' && (key === 'reports' || key === 'technicians' || key === 'monitoring')) {
+                    return null;
+                }
+                return (
+                <FormField
+                    key={key}
+                    control={form.control}
+                    name={`permissions.${key}`}
+                    render={({ field }) => (
+                    <FormItem className="space-y-3 rounded-md border p-4">
+                        <FormLabel className="font-semibold">{moduleLabels[key]}</FormLabel>
+                        <FormControl>
+                        <RadioGroup onValueChange={field.onChange} value={field.value} className="flex items-center space-x-4">
+                            <FormItem className="flex items-center space-x-2 space-y-0">
+                            <FormControl><RadioGroupItem value="none" /></FormControl>
+                            <FormLabel className="font-normal">Nenhum</FormLabel>
+                            </FormItem>
+                            <FormItem className="flex items-center space-x-2 space-y-0">
+                            <FormControl><RadioGroupItem value="read" /></FormControl>
+                            <FormLabel className="font-normal">Leitura</FormLabel>
+                            </FormItem>
+                            <FormItem className="flex items-center space-x-2 space-y-0">
+                            <FormControl><RadioGroupItem value="write" /></FormControl>
+                            <FormLabel className="font-normal">Escrita</FormLabel>
+                            </FormItem>
+                        </RadioGroup>
+                        </FormControl>
+                    </FormItem>
+                    )}
+                />
+                );
+            })}
+        </div>
+    );
+}
+
+
+// ---- Main Form ----
 
 const formSchema = z.object({
   name: z.string().min(2, { message: "O nome é obrigatório." }),
@@ -36,25 +149,29 @@ const formSchema = z.object({
   sectorIds: z.array(z.string()).optional(),
   euroInfoId: z.string().optional(),
   rondoInfoId: z.string().optional(),
+  status: z.enum(['active', 'inactive']),
+  permissions: permissionsFormSchema,
 }).refine(data => !(data.role === 'encarregado' && (!data.sectorIds || data.sectorIds.length === 0)), {
     message: "O setor é obrigatório para encarregados.",
     path: ["sectorIds"],
 });
 
 
-export type EditUserFormValues = z.infer<typeof formSchema>;
+export type EditUserFormValues = Omit<z.infer<typeof formSchema>, 'status' | 'permissions'>;
 
 interface EditUserFormProps {
   user: User;
-  onSave: (userId: string, values: EditUserFormValues) => Promise<boolean>;
+  onSave: (userId: string, values: EditUserFormValues, newStatus: UserStatus) => Promise<boolean>;
+  onSavePermissions: (userId: string, permissions: Partial<ModulePermissions>) => Promise<void>;
   onFinished: () => void;
   sectors: Sector[];
 }
 
-export function EditUserForm({ user, onSave, onFinished, sectors }: EditUserFormProps) {
+export function EditUserForm({ user, onSave, onSavePermissions, onFinished, sectors }: EditUserFormProps) {
   const [isSaving, setIsSaving] = useState(false);
+  const defaultPermissions = user.role === 'gerente' ? defaultGerentePermissions : defaultEncarregadoPermissions;
   
-  const form = useForm<EditUserFormValues>({
+  const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: user.name,
@@ -63,21 +180,34 @@ export function EditUserForm({ user, onSave, onFinished, sectors }: EditUserForm
       sectorIds: user.sectorIds || [],
       euroInfoId: user.euroInfoId || "",
       rondoInfoId: user.rondoInfoId || "",
+      status: user.status as 'active' | 'inactive',
+      permissions: { ...defaultPermissions, ...user.permissions }
     },
   });
 
   const role = form.watch("role");
 
-  async function onSubmit(values: EditUserFormValues) {
+  useEffect(() => {
+    // Reset permissions when role changes
+    const newDefaultPermissions = role === 'gerente' ? defaultGerentePermissions : defaultEncarregadoPermissions;
+    form.setValue('permissions', newDefaultPermissions);
+  }, [role, form]);
+
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSaving(true);
-    await onSave(user.id, values);
+    const { status, permissions, ...otherValues } = values;
+    const infoSaved = await onSave(user.id, otherValues, status);
+    if(infoSaved) {
+        await onSavePermissions(user.id, permissions);
+    }
     setIsSaving(false);
   }
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-        <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-4">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-4">
+          <h3 className="text-lg font-medium border-b pb-2">Dados do Usuário</h3>
           <FormField
             control={form.control}
             name="name"
@@ -179,7 +309,7 @@ export function EditUserForm({ user, onSave, onFinished, sectors }: EditUserForm
                           </Button>
                         </FormControl>
                       </PopoverTrigger>
-                      <PopoverContent className="w-full p-0">
+                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
                         <Command>
                           <CommandInput placeholder="Buscar setor..." />
                           <CommandEmpty>Nenhum setor encontrado.</CommandEmpty>
@@ -218,8 +348,30 @@ export function EditUserForm({ user, onSave, onFinished, sectors }: EditUserForm
                 )}
             />
           )}
+
+           <UserPermissionsSubForm form={form} userRole={role} />
+
+           <Separator className="my-4" />
+            
+            <FormField
+               control={form.control}
+               name="status"
+               render={({ field }) => (
+                 <FormItem className="flex flex-row items-center justify-start space-x-3 space-y-0 rounded-md border p-4">
+                   <FormControl>
+                       <Checkbox
+                           checked={field.value === 'active'}
+                           onCheckedChange={(checked) => field.onChange(checked ? 'active' : 'inactive')}
+                       />
+                   </FormControl>
+                   <FormLabel className="text-base">
+                       Usuário {field.value === 'active' ? 'Ativo' : 'Inativo'}
+                   </FormLabel>
+                 </FormItem>
+               )}
+            />
         </div>
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 pt-4 border-t">
             <Button type="button" variant="ghost" onClick={onFinished} disabled={isSaving}>Cancelar</Button>
             <Button type="submit" disabled={isSaving}>
                 {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

@@ -13,7 +13,7 @@ import {
   useReactTable,
   ColumnFiltersState,
 } from "@tanstack/react-table"
-import { ArrowUpDown, MoreHorizontal, ChevronLeft, ChevronsLeft, ChevronsRight, ChevronRight } from "lucide-react"
+import { ArrowUpDown, MoreHorizontal, ChevronLeft, ChevronsLeft, ChevronsRight, ChevronRight, Copy } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -21,7 +21,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
@@ -38,80 +37,47 @@ import type { ServiceContract, Sector } from "@/lib/types"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { EditContractForm, EditContractFormValues } from "./edit-contract-form"
 import { format } from "date-fns"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select"
+import { useToast } from "@/hooks/use-toast"
 
-type ActionType = 'activate' | 'deactivate';
-
-const ActionsCell = ({ row, onStatusChange, onEdit }: { row: any, onStatusChange: (contract: ServiceContract, status: 'active' | 'inactive') => void, onEdit: (contract: ServiceContract) => void }) => {
+const ActionsCell = ({ row }: { row: any }) => {
   const contract = row.original as ServiceContract
-  const [isAlertOpen, setIsAlertOpen] = React.useState(false);
-  const [actionType, setActionType] = React.useState<ActionType | null>(null);
+  const { toast } = useToast();
 
-  const handleActionClick = (type: ActionType) => {
-    setActionType(type);
-    setIsAlertOpen(true);
-  }
-
-  const handleConfirmAction = () => {
-    if (actionType) {
-      onStatusChange(contract, actionType === 'activate' ? 'active' : 'inactive');
-    }
-    setIsAlertOpen(false);
+  const handleCopyId = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(contract.id);
+    toast({ title: "ID do Contrato copiado!" });
   }
 
   return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="h-8 w-8 p-0" onClick={(e) => e.stopPropagation()}>
-            <span className="sr-only">Abrir menu</span>
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuLabel>Ações</DropdownMenuLabel>
-          <DropdownMenuItem onClick={() => onEdit(contract)}>Editar Contrato</DropdownMenuItem>
-          <DropdownMenuSeparator />
-          {contract.status === 'active' ? (
-              <DropdownMenuItem onClick={() => handleActionClick('deactivate')} className="text-destructive focus:text-destructive">
-                  Desativar
-              </DropdownMenuItem>
-          ) : (
-              <DropdownMenuItem onClick={() => handleActionClick('activate')}>
-                  Reativar
-              </DropdownMenuItem>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-       <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Você deseja {actionType === 'activate' ? 'reativar' : 'desativar'} o contrato para o cliente {contract.clientName}?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmAction}>Confirmar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" className="h-8 w-8 p-0" onClick={(e) => e.stopPropagation()}>
+          <span className="sr-only">Abrir menu</span>
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+        <DropdownMenuLabel>Ações</DropdownMenuLabel>
+        <DropdownMenuItem onClick={handleCopyId}>
+            <Copy className="mr-2 h-4 w-4" />
+            Copiar ID
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
 interface ContractsTableProps {
     data: ServiceContract[];
     sectors: Sector[];
-    onStatusChange: (contract: ServiceContract, status: 'active' | 'inactive') => void;
-    onUpdateContract: (contractId: string, values: EditContractFormValues) => Promise<boolean>;
+    onUpdateContract: (contractId: string, values: EditContractFormValues, newStatus: 'active' | 'inactive') => Promise<boolean>;
 }
 
-export function ContractsTable({ data, sectors, onStatusChange, onUpdateContract }: ContractsTableProps) {
+export function ContractsTable({ data, sectors, onUpdateContract }: ContractsTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([
     { id: 'clientName', desc: false }
   ])
@@ -125,8 +91,8 @@ export function ContractsTable({ data, sectors, onStatusChange, onUpdateContract
     setIsEditOpen(true);
   };
 
-  const handleSaveEdit = async (contractId: string, values: EditContractFormValues) => {
-      const success = await onUpdateContract(contractId, values);
+  const handleSaveEdit = async (contractId: string, values: EditContractFormValues, newStatus: 'active' | 'inactive') => {
+      const success = await onUpdateContract(contractId, values, newStatus);
       if (success) {
           setIsEditOpen(false);
       }
@@ -185,11 +151,11 @@ export function ContractsTable({ data, sectors, onStatusChange, onUpdateContract
       {
         id: "actions",
         enableHiding: false,
-        cell: ({ row }) => <ActionsCell row={row} onStatusChange={onStatusChange} onEdit={handleEdit} />,
+        cell: ({ row }) => <ActionsCell row={row} />,
       },
     ];
     return columns;
-  }, [onStatusChange, sectors]);
+  }, [sectors]);
 
   const filteredData = React.useMemo(() => {
     if (showInactive) return data;
@@ -354,15 +320,37 @@ export function ContractsTable({ data, sectors, onStatusChange, onUpdateContract
       </div>
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
           <DialogContent className="sm:max-w-xl">
-            <DialogHeader>
-              <DialogTitle>Editar Contrato de Serviço</DialogTitle>
-              <DialogDescription>Altere as informações do contrato para {selectedContract?.clientName}.</DialogDescription>
-            </DialogHeader>
-            {selectedContract && <EditContractForm 
-                contract={selectedContract} 
-                sectors={sectors}
-                onSave={handleSaveEdit} 
-                onFinished={() => setIsEditOpen(false)} />}
+            {selectedContract && (
+            <>
+                <DialogHeader>
+                    <DialogTitle>Editar Contrato: {selectedContract.clientName}</DialogTitle>
+                    <DialogDescription>
+                        <div className="flex items-center gap-2 pt-2">
+                            <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded">
+                                ID: {selectedContract.id}
+                            </span>
+                            <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-6 w-6"
+                                onClick={() => {
+                                    navigator.clipboard.writeText(selectedContract.id);
+                                    useToast().toast({ title: "ID copiado para a área de transferência." });
+                                }}
+                                >
+                                <Copy className="h-4 w-4" />
+                            </Button>
+                        </div>
+                  </DialogDescription>
+                </DialogHeader>
+                <EditContractForm 
+                    contract={selectedContract} 
+                    sectors={sectors}
+                    onSave={handleSaveEdit} 
+                    onFinished={() => setIsEditOpen(false)} 
+                />
+            </>
+            )}
           </DialogContent>
         </Dialog>
     </div>

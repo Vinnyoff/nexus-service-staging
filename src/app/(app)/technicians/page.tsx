@@ -36,16 +36,11 @@ export default function TechniciansPage() {
   
   useEffect(() => {
     setLoading(true);
-    let initialLoadComplete = false;
 
     const unsubTechnicians = onSnapshot(query(collection(db, "technicians")), 
         (snapshot) => {
             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Technician[];
             setRawTechnicians(data);
-        },
-        (error) => {
-            console.warn("A coleção 'technicians' não foi encontrada ou ocorreu um erro.", error);
-            setRawTechnicians([]);
         }
     );
 
@@ -53,10 +48,6 @@ export default function TechniciansPage() {
         (snapshot) => {
             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as User[];
             setAllUsers(data);
-        },
-        (error) => {
-            console.warn("A coleção 'users' não foi encontrada ou ocorreu um erro.", error);
-            setAllUsers([]);
         }
     );
     
@@ -64,14 +55,9 @@ export default function TechniciansPage() {
         (snapshot) => {
             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Sector[];
             setSectors(data);
-        },
-        (error) => {
-            console.warn("A coleção 'sectors' não foi encontrada ou ocorreu um erro.", error);
-            setSectors([]);
         }
     );
 
-    // Turn off loading after a short delay to allow all listeners to populate state
     const timer = setTimeout(() => {
         if (loading) {
             setLoading(false);
@@ -93,12 +79,12 @@ export default function TechniciansPage() {
     return rawTechnicians.map(techData => {
         const correspondingUser = allUsers.find(u => u.id === techData.userId);
         if (!correspondingUser) {
-            return null; // This technician's user doc might not exist yet or was deleted
+            return null;
         }
         return {
-            ...correspondingUser, // User data comes first
-            ...techData,        // Technician data overwrites, preserving specific technician fields
-            id: techData.id,    // Ensure technician ID (which is the same as userId) is correct
+            ...correspondingUser,
+            ...techData,
+            id: techData.id,
         };
     }).filter(Boolean) as Technician[];
   }, [rawTechnicians, allUsers]);
@@ -163,7 +149,6 @@ export default function TechniciansPage() {
         euroInfoId: values.euroInfoId,
         rondoInfoId: values.rondoInfoId,
       };
-      // The ID for the technician document is the same as the user ID
       await setDoc(doc(db, "technicians", newUserId), newTechnician);
       
       setIsDialogOpen(false);
@@ -185,7 +170,7 @@ export default function TechniciansPage() {
     }
   };
   
-    const handleUpdateTechnician = async (technicianId: string, values: EditTechnicianFormValues) => {
+  const handleUpdateTechnician = async (technicianId: string, values: EditTechnicianFormValues, newStatus: UserStatus) => {
     const batch = writeBatch(db);
     const techRef = doc(db, "technicians", technicianId);
     const userRef = doc(db, "users", technicianId);
@@ -196,6 +181,7 @@ export default function TechniciansPage() {
         sectorIds: values.sectorIds,
         euroInfoId: values.euroInfoId,
         rondoInfoId: values.rondoInfoId,
+        status: newStatus,
         updatedAt: new Date().toISOString(),
     };
     
@@ -205,6 +191,7 @@ export default function TechniciansPage() {
         sectorIds: values.sectorIds,
         euroInfoId: values.euroInfoId,
         rondoInfoId: values.rondoInfoId,
+        status: newStatus,
     });
 
     try {
@@ -229,29 +216,6 @@ export default function TechniciansPage() {
     } catch (error) {
         console.error("Error updating permissions:", error);
         toast({ variant: "destructive", title: "Erro ao salvar permissões" });
-    }
-  };
-  
-  const handleStatusChange = async (technician: Technician, newStatus: UserStatus) => {
-    const batch = writeBatch(db);
-    const techRef = doc(db, "technicians", technician.id);
-    const userRef = doc(db, "users", technician.id);
-
-    batch.update(techRef, { status: newStatus });
-    batch.update(userRef, { status: newStatus });
-
-    try {
-        await batch.commit();
-        toast({
-            title: "Status do Técnico Atualizado!",
-            description: `O técnico ${technician.name} foi ${newStatus === 'active' ? 'reativado' : 'desativado'}.`,
-        });
-    } catch (error) {
-        console.error("Error updating technician status:", error);
-        toast({
-            variant: "destructive",
-            title: "Erro ao atualizar status",
-        });
     }
   };
 
@@ -293,7 +257,6 @@ export default function TechniciansPage() {
           data={filteredTechnicians} 
           sectors={sectors} 
           onSavePermissions={handleUpdatePermissions}
-          onStatusChange={handleStatusChange}
           onUpdateTechnician={handleUpdateTechnician}
         />
       )}

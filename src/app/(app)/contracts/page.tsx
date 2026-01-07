@@ -19,7 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { ContractsTable } from "@/components/contracts/contracts-table";
 import { NewContractForm, NewContractFormValues } from "@/components/contracts/new-contract-form";
-import { EditContractForm, EditContractFormValues } from "@/components/contracts/edit-contract-form";
+import { EditContractFormValues } from "@/components/contracts/edit-contract-form";
 import { generatePreventiveTickets } from "@/lib/services/preventive-maintenance-service";
 
 
@@ -35,41 +35,27 @@ export default function ContractsPage() {
 
   useEffect(() => {
     setLoading(true);
-    const unsubContracts = onSnapshot(collection(db, "serviceContracts"), 
-      (querySnapshot) => {
-        setContracts(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ServiceContract)));
-        if (!clients.length || !sectors.length) return;
-        setLoading(false);
-      }, 
-      (error) => {
-        console.error("Error fetching contracts:", error);
-        toast({ variant: 'destructive', title: "Erro ao buscar contratos"});
-        setLoading(false);
-      }
-    );
     
-    const unsubClients = onSnapshot(collection(db, "clients"), 
-      (querySnapshot) => {
-        setClients(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client)));
-        if (!contracts.length || !sectors.length) return;
-        setLoading(false);
-      }
-    );
-    
-    const unsubSectors = onSnapshot(collection(db, "sectors"), 
-      (querySnapshot) => {
-        setSectors(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sector)));
-        if (!contracts.length || !clients.length) return;
-        setLoading(false);
-      }
-    );
+    const unsubContracts = onSnapshot(collection(db, "serviceContracts"), (snapshot) => {
+        setContracts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ServiceContract)));
+    });
+    const unsubClients = onSnapshot(collection(db, "clients"), (snapshot) => {
+        setClients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client)));
+    });
+    const unsubSectors = onSnapshot(collection(db, "sectors"), (snapshot) => {
+        setSectors(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sector)));
+    });
+
+    // Simple timeout to avoid UI shift on fast connections
+    const timer = setTimeout(() => setLoading(false), 500);
 
     return () => {
         unsubContracts();
         unsubClients();
         unsubSectors();
-    }
-  }, [toast, clients.length, sectors.length, contracts.length]);
+        clearTimeout(timer);
+    };
+  }, []);
 
   const handleAddContract = async (values: NewContractFormValues) => {
     if (!user) {
@@ -140,45 +126,23 @@ export default function ContractsPage() {
     }
   };
 
-  const handleUpdateContract = async (contractId: string, values: EditContractFormValues) => {
-    const batch = writeBatch(db);
+  const handleUpdateContract = async (contractId: string, values: EditContractFormValues, newStatus: 'active' | 'inactive') => {
     const contractRef = doc(db, "serviceContracts", contractId);
     
     try {
-        const contractSnap = await getDoc(contractRef);
-        
         const updatedData = { 
             ...values,
+            status: newStatus,
             updatedAt: new Date().toISOString(),
         };
 
-        batch.update(contractRef, updatedData);
-
-        await batch.commit();
+        await updateDoc(contractRef, updatedData);
         toast({ title: "Contrato atualizado com sucesso!" });
         return true;
     } catch (error) {
         console.error("Error updating contract: ", error);
         toast({ variant: 'destructive', title: "Erro ao atualizar contrato" });
         return false;
-    }
-  };
-  
-  const handleStatusChange = async (contract: ServiceContract, newStatus: 'active' | 'inactive') => {
-    const contractRef = doc(db, "serviceContracts", contract.id);
-    try {
-        await updateDoc(contractRef, { status: newStatus });
-        toast({
-            title: "Status do Contrato Atualizado!",
-            description: `O contrato para ${contract.clientName} foi ${newStatus === 'active' ? 'reativado' : 'desativado'}.`,
-        });
-    } catch (error) {
-        console.error("Error updating contract status: ", error);
-        toast({
-            variant: "destructive",
-            title: "Erro ao atualizar status",
-            description: "Ocorreu um erro ao alterar o status do contrato.",
-        });
     }
   };
 
@@ -243,7 +207,6 @@ export default function ContractsPage() {
         <ContractsTable 
           data={contracts}
           sectors={sectors}
-          onStatusChange={handleStatusChange}
           onUpdateContract={handleUpdateContract}
         />
       )}

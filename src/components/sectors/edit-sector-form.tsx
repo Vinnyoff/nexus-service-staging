@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useForm } from "react-hook-form";
@@ -23,14 +24,13 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogTrigger,
-  DialogFooter,
-  DialogClose
 } from "@/components/ui/dialog";
 import { fetchWhatsappGroups, WhatsappGroup } from "@/ai/flows/fetch-whatsapp-groups";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "../ui/scroll-area";
 import { Command, CommandEmpty, CommandInput, CommandGroup, CommandList, CommandItem } from "../ui/command";
+import { Separator } from "../ui/separator";
+import { Checkbox } from "../ui/checkbox";
 
 const formSchema = z.object({
   name: z.string().min(2, { message: "O nome deve ter pelo menos 2 caracteres." }),
@@ -39,13 +39,14 @@ const formSchema = z.object({
   whatsappGroupId: z.string().optional(),
   euroInfoId: z.string().optional(),
   rondoInfoId: z.string().optional(),
+  status: z.enum(['active', 'archived']),
 });
 
-export type EditSectorFormValues = z.infer<typeof formSchema>;
+export type EditSectorFormValues = Omit<z.infer<typeof formSchema>, 'status'>;
 
 interface EditSectorFormProps {
   sector: Sector;
-  onSave: (sectorId: string, values: EditSectorFormValues) => Promise<boolean>;
+  onSave: (sectorId: string, values: EditSectorFormValues, newStatus: 'active' | 'archived') => Promise<boolean>;
   onFinished: () => void;
 }
 
@@ -57,7 +58,7 @@ export function EditSectorForm({ sector, onSave, onFinished }: EditSectorFormPro
   const [groupSearch, setGroupSearch] = useState("");
   const { toast } = useToast();
   
-  const form = useForm<EditSectorFormValues>({
+  const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: sector.name,
@@ -66,12 +67,14 @@ export function EditSectorForm({ sector, onSave, onFinished }: EditSectorFormPro
       whatsappGroupId: sector.whatsappGroupId || "",
       euroInfoId: sector.euroInfoId || "",
       rondoInfoId: sector.rondoInfoId || "",
+      status: sector.status,
     },
   });
 
-  async function onSubmit(values: EditSectorFormValues) {
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSaving(true);
-    await onSave(sector.id, values);
+    const { status, ...otherValues } = values;
+    await onSave(sector.id, otherValues, status);
     setIsSaving(false);
   }
 
@@ -103,8 +106,8 @@ export function EditSectorForm({ sector, onSave, onFinished }: EditSectorFormPro
   return (
     <>
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-        <div className="space-y-4">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-4">
           <FormField
             control={form.control}
             name="name"
@@ -190,8 +193,28 @@ export function EditSectorForm({ sector, onSave, onFinished }: EditSectorFormPro
                 )}
             />
           </div>
+
+          <Separator className="my-4" />
+            
+             <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-start space-x-3 space-y-0 rounded-md border p-4">
+                    <FormControl>
+                        <Checkbox
+                            checked={field.value === 'active'}
+                            onCheckedChange={(checked) => field.onChange(checked ? 'active' : 'archived')}
+                        />
+                    </FormControl>
+                    <FormLabel className="text-base">
+                        Setor {field.value === 'active' ? 'Ativo' : 'Arquivado'}
+                    </FormLabel>
+                  </FormItem>
+                )}
+              />
         </div>
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 pt-4 border-t">
             <Button type="button" variant="ghost" onClick={onFinished} disabled={isSaving}>Cancelar</Button>
             <Button type="submit" disabled={isSaving}>
                 {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

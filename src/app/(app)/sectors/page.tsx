@@ -18,7 +18,7 @@ import { Sector } from "@/lib/types";
 import { collection, addDoc, onSnapshot, doc, updateDoc } from "firebase/firestore";
 import { db } from "@/firebase/config";
 import { useToast } from "@/hooks/use-toast";
-import { EditSectorForm, EditSectorFormValues } from "@/components/sectors/edit-sector-form";
+import { EditSectorFormValues } from "@/components/sectors/edit-sector-form";
 
 
 export default function SectorsPage() {
@@ -51,8 +51,7 @@ export default function SectorsPage() {
             ...values,
             status: 'active'
         };
-        const docRef = await addDoc(collection(db, "sectors"), newSectorData);
-        // No need to update state, onSnapshot will handle it.
+        await addDoc(collection(db, "sectors"), newSectorData);
         toast({ title: "Setor adicionado com sucesso!" });
         setIsNewDialogOpen(false);
     } catch (error) {
@@ -61,33 +60,16 @@ export default function SectorsPage() {
     }
   };
 
-  const handleUpdateSector = async (sectorId: string, values: EditSectorFormValues) => {
+  const handleUpdateSector = async (sectorId: string, values: EditSectorFormValues, newStatus: 'active' | 'archived') => {
     const sectorRef = doc(db, "sectors", sectorId);
     try {
-        await updateDoc(sectorRef, values);
+        await updateDoc(sectorRef, { ...values, status: newStatus });
         toast({ title: "Setor atualizado com sucesso!" });
         return true; // Indicate success to close dialog
     } catch (error) {
         console.error("Error updating sector: ", error);
         toast({ variant: 'destructive', title: "Erro ao atualizar setor" });
         return false;
-    }
-  };
-  
-  const handleStatusChange = async (sector: Sector, newStatus: 'active' | 'archived') => {
-    const sectorRef = doc(db, "sectors", sector.id);
-    try {
-        await updateDoc(sectorRef, { status: newStatus });
-        toast({
-            title: "Status do Setor Atualizado!",
-            description: `O setor ${sector.name} foi ${newStatus === 'active' ? 'reativado' : 'arquivado'}.`,
-        });
-    } catch (error) {
-        console.error("Error updating sector status: ", error);
-        toast({
-            variant: "destructive",
-            title: "Erro ao atualizar status",
-        });
     }
   };
 
@@ -116,7 +98,6 @@ export default function SectorsPage() {
       ) : (
         <SectorsTable 
             data={sectors} 
-            onStatusChange={handleStatusChange}
             onUpdateSector={handleUpdateSector}
         />
       )}

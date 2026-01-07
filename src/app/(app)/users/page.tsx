@@ -112,7 +112,7 @@ export default function UsersPage() {
     }
   };
 
-  const handleUpdateUser = async (userId: string, values: EditUserFormValues) => {
+  const handleUpdateUser = async (userId: string, values: EditUserFormValues, newStatus: UserStatus) => {
     const userDocRef = doc(db, "users", userId);
     try {
       const updateData: Partial<User> = {
@@ -120,12 +120,13 @@ export default function UsersPage() {
         phone: values.phone,
         role: values.role,
         sectorIds: values.role === 'encarregado' ? values.sectorIds : [],
+        status: newStatus,
         updatedAt: new Date().toISOString(),
         euroInfoId: values.euroInfoId,
         rondoInfoId: values.rondoInfoId,
       };
 
-      await updateDoc(userDocRef, updateData);
+      await updateDoc(userDocRef, updateData as { [key: string]: any });
 
       toast({ title: "Usuário atualizado com sucesso!" });
       return true;
@@ -136,20 +137,6 @@ export default function UsersPage() {
     }
   };
   
-  const handleStatusChange = async (user: User, newStatus: UserStatus) => {
-    const userRef = doc(db, "users", user.id);
-    try {
-        await updateDoc(userRef, { status: newStatus });
-        toast({
-            title: "Status do Usuário Atualizado!",
-            description: `O usuário ${user.name} foi ${newStatus === 'active' ? 'reativado' : 'desativado'}.`,
-        });
-    } catch (error) {
-        console.error("Error updating user status:", error);
-        toast({ variant: "destructive", title: "Erro ao atualizar status" });
-    }
-  };
-
   const handleUpdatePermissions = async (userId: string, permissions: Partial<ModulePermissions>) => {
     const userDocRef = doc(db, "users", userId);
     try {
@@ -212,7 +199,6 @@ export default function UsersPage() {
           sectors={sectors} 
           onSavePermissions={handleUpdatePermissions}
           onSaveUser={handleUpdateUser}
-          onStatusChange={handleStatusChange}
         />
       )}
     </>

@@ -14,7 +14,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table"
-import { ArrowUpDown, ChevronLeft, ChevronsLeft, ChevronsRight, ChevronRight, MoreHorizontal } from "lucide-react"
+import { ArrowUpDown, ChevronLeft, ChevronsLeft, ChevronsRight, ChevronRight, MoreHorizontal, Copy } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -22,7 +22,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
@@ -37,92 +36,48 @@ import {
 import { Badge } from "@/components/ui/badge"
 import type { Sector } from "@/lib/types"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../ui/dialog"
-import { SectorDetails } from "./sector-details"
 import { Checkbox } from "../ui/checkbox"
 import { Label } from "../ui/label"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../ui/alert-dialog"
 import { EditSectorForm, EditSectorFormValues } from "./edit-sector-form"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select"
+import { useToast } from "@/hooks/use-toast"
 
 
-const ActionsCell = ({ row, onEdit, onStatusChange }: { row: any, onEdit: (sector: Sector) => void, onStatusChange: (sector: Sector, newStatus: 'active' | 'archived') => void }) => {
+const ActionsCell = ({ row }: { row: any }) => {
   const sector = row.original as Sector;
-  const [isAlertOpen, setIsAlertOpen] = React.useState(false);
-  const [actionType, setActionType] = React.useState<'activate' | 'archive' | null>(null);
+  const { toast } = useToast();
 
-  const handleActionClick = (e: React.MouseEvent, type: 'activate' | 'archive') => {
+  const handleCopyId = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setActionType(type);
-    setIsAlertOpen(true);
+    navigator.clipboard.writeText(sector.id);
+    toast({ title: "ID do Setor copiado!" });
   }
-
-  const handleConfirmAction = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (actionType) {
-      onStatusChange(sector, actionType === 'activate' ? 'active' : 'archived');
-    }
-    setIsAlertOpen(false);
-  }
-  
-  const handleEditClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onEdit(sector);
-  };
 
   return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="h-8 w-8 p-0" onClick={(e) => e.stopPropagation()}>
-            <span className="sr-only">Abrir menu</span>
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-          <DropdownMenuLabel>Ações</DropdownMenuLabel>
-          <DropdownMenuItem
-            onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(sector.id)}}
-          >
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" className="h-8 w-8 p-0" onClick={(e) => e.stopPropagation()}>
+          <span className="sr-only">Abrir menu</span>
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+        <DropdownMenuLabel>Ações</DropdownMenuLabel>
+        <DropdownMenuItem onClick={handleCopyId}>
+            <Copy className="mr-2 h-4 w-4" />
             Copiar ID
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleEditClick}>Editar</DropdownMenuItem>
-          {sector.status === 'active' ? (
-            <DropdownMenuItem onClick={(e) => handleActionClick(e, 'archive')} className="text-destructive focus:text-destructive">
-              Arquivar
-            </DropdownMenuItem>
-          ) : (
-            <DropdownMenuItem onClick={(e) => handleActionClick(e, 'activate')}>
-              Reativar
-            </DropdownMenuItem>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
-        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Você deseja {actionType === 'activate' ? 'reativar' : 'arquivar'} o setor {sector.name}?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmAction}>Confirmar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
 interface SectorsTableProps {
     data: Sector[];
-    onStatusChange: (sector: Sector, newStatus: 'active' | 'archived') => void;
-    onUpdateSector: (sectorId: string, values: EditSectorFormValues) => Promise<boolean>;
+    onUpdateSector: (sectorId: string, values: EditSectorFormValues, newStatus: 'active' | 'archived') => Promise<boolean>;
 }
 
-export function SectorsTable({ data, onStatusChange, onUpdateSector }: SectorsTableProps) {
+export function SectorsTable({ data, onUpdateSector }: SectorsTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
     []
@@ -130,9 +85,8 @@ export function SectorsTable({ data, onStatusChange, onUpdateSector }: SectorsTa
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = React.useState({})
-  const [selectedSector, setSelectedSector] = React.useState<Sector | null>(null);
-  const [isDetailsOpen, setIsDetailsOpen] = React.useState(false);
   const [isEditOpen, setIsEditOpen] = React.useState(false);
+  const [selectedSector, setSelectedSector] = React.useState<Sector | null>(null);
   const [showArchived, setShowArchived] = React.useState(false);
   
   const filteredData = React.useMemo(() => {
@@ -145,8 +99,8 @@ export function SectorsTable({ data, onStatusChange, onUpdateSector }: SectorsTa
     setIsEditOpen(true);
   };
   
-  const handleSaveEdit = async (sectorId: string, values: EditSectorFormValues) => {
-      const success = await onUpdateSector(sectorId, values);
+  const handleSaveEdit = async (sectorId: string, values: EditSectorFormValues, newStatus: 'active' | 'archived') => {
+      const success = await onUpdateSector(sectorId, values, newStatus);
       if (success) {
           setIsEditOpen(false);
       }
@@ -183,7 +137,7 @@ export function SectorsTable({ data, onStatusChange, onUpdateSector }: SectorsTa
   {
     id: "actions",
     enableHiding: false,
-    cell: ({ row }) => <ActionsCell row={row} onEdit={handleEdit} onStatusChange={onStatusChange} />,
+    cell: ({ row }) => <ActionsCell row={row} />,
   },
 ]
 
@@ -206,17 +160,6 @@ export function SectorsTable({ data, onStatusChange, onUpdateSector }: SectorsTa
       rowSelection,
     },
   })
-
-  const handleRowDoubleClick = (row: any) => {
-    setSelectedSector(row.original);
-    setIsDetailsOpen(true);
-  }
-
-  React.useEffect(() => {
-    if (!isDetailsOpen) {
-      setSelectedSector(null);
-    }
-  }, [isDetailsOpen]);
 
   return (
     <div className="w-full">
@@ -264,7 +207,7 @@ export function SectorsTable({ data, onStatusChange, onUpdateSector }: SectorsTa
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
-                  onDoubleClick={() => handleRowDoubleClick(row)}
+                  onDoubleClick={() => handleEdit(row.original)}
                   className="cursor-pointer"
                 >
                   {row.getVisibleCells().map((cell) => (
@@ -359,21 +302,38 @@ export function SectorsTable({ data, onStatusChange, onUpdateSector }: SectorsTa
             </div>
         </div>
       </div>
-      <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Detalhes do Setor</DialogTitle>
-            </DialogHeader>
-            {selectedSector && <SectorDetails sector={selectedSector} />}
-          </DialogContent>
-        </Dialog>
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
           <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Editar Setor</DialogTitle>
-              <DialogDescription>Altere as informações do setor {selectedSector?.name}</DialogDescription>
-            </DialogHeader>
-            {selectedSector && <EditSectorForm sector={selectedSector} onSave={handleSaveEdit} onFinished={() => setIsEditOpen(false)} />}
+            {selectedSector && (
+                <>
+                    <DialogHeader>
+                        <DialogTitle>Editar Setor: {selectedSector.name}</DialogTitle>
+                         <DialogDescription>
+                            <div className="flex items-center gap-2 pt-2">
+                                <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded">
+                                    ID: {selectedSector.id}
+                                </span>
+                                <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-6 w-6"
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(selectedSector.id);
+                                        useToast().toast({ title: "ID copiado para a área de transferência." });
+                                    }}
+                                    >
+                                    <Copy className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </DialogDescription>
+                    </DialogHeader>
+                    <EditSectorForm 
+                        sector={selectedSector} 
+                        onSave={handleSaveEdit} 
+                        onFinished={() => setIsEditOpen(false)} 
+                    />
+                </>
+            )}
           </DialogContent>
         </Dialog>
     </div>

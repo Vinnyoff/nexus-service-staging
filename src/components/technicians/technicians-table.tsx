@@ -2,9 +2,6 @@
 "use client"
 
 import * as React from "react"
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
 import {
   ColumnDef,
   ColumnFiltersState,
@@ -17,7 +14,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table"
-import { ArrowUpDown, ChevronLeft, ChevronsLeft, ChevronsRight, ChevronRight, MoreHorizontal, Loader2 } from "lucide-react"
+import { ArrowUpDown, ChevronLeft, ChevronsLeft, ChevronsRight, ChevronRight, MoreHorizontal, Copy } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -40,156 +37,12 @@ import {
 import { Badge } from "@/components/ui/badge"
 import type { ModulePermissions, Sector, Technician, User, UserStatus } from "@/lib/types"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../ui/dialog"
-import { TechnicianDetails } from "./technician-details"
-import { Form, FormControl, FormField, FormItem, FormLabel } from '@/components/ui/form';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { db } from "@/firebase/config";
-import { useToast } from "@/hooks/use-toast";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast"
 import { Checkbox } from "../ui/checkbox";
 import { Label } from "../ui/label";
 import { EditTechnicianForm, EditTechnicianFormValues } from "./edit-technician-form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 
-
-// --- In-file Permissions Form Component ---
-
-const permissionSchema = z.enum(['none', 'read', 'write']);
-const permissionsFormSchema = z.object({
-  dashboard: permissionSchema,
-  external_tickets: permissionSchema,
-  internal_tickets: permissionSchema,
-  routes: permissionSchema,
-  planning: permissionSchema,
-  reports: permissionSchema,
-  history: permissionSchema,
-  clients: permissionSchema,
-  technicians: permissionSchema,
-  location: permissionSchema,
-  monitoring: permissionSchema,
-});
-
-type PermissionsFormValues = z.infer<typeof permissionsFormSchema>;
-
-const moduleLabels: Record<keyof ModulePermissions, string> = {
-    dashboard: "Dashboard",
-    external_tickets: "Chamados Externos",
-    internal_tickets: "Atendimentos Internos",
-    routes: "Otimizar Rotas",
-    planning: "Planejamento",
-    reports: "Relatórios",
-    history: "Histórico",
-    clients: "Clientes",
-    technicians: "Técnicos",
-    location: "Localização",
-    monitoring: "Monitoramento",
-};
-
-const defaultPermissions: PermissionsFormValues = {
-    dashboard: 'read',
-    external_tickets: 'write',
-    internal_tickets: 'write',
-    routes: 'write',
-    planning: 'none',
-    location: 'read',
-    reports: 'none',
-    history: 'read',
-    clients: 'read',
-    technicians: 'none',
-    monitoring: 'none',
-};
-
-interface PermissionsFormProps {
-  technician: Technician;
-  onFinished: () => void;
-  onSave: (userId: string, permissions: Partial<ModulePermissions>) => Promise<void>;
-}
-
-function TechnicianPermissionsForm({ technician, onFinished, onSave }: PermissionsFormProps) {
-  const [loading, setLoading] = React.useState(true);
-  const form = useForm<PermissionsFormValues>({
-    resolver: zodResolver(permissionsFormSchema),
-    defaultValues: defaultPermissions
-  });
-
-  React.useEffect(() => {
-    const fetchPermissions = async () => {
-      if (!technician?.id) return;
-      setLoading(true);
-      try {
-        const userDocRef = doc(db, 'users', technician.id);
-        const userSnap = await getDoc(userDocRef);
-        if (userSnap.exists()) {
-          const userData = userSnap.data() as User;
-          const currentPermissions = { ...defaultPermissions, ...userData.permissions };
-          form.reset(currentPermissions);
-        }
-      } catch (error) {
-        console.error("Error fetching permissions:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchPermissions();
-  }, [technician, form]);
-
-  const handleSave = async (values: PermissionsFormValues) => {
-    await onSave(technician.id, values);
-    onFinished();
-  }
-
-  if (loading) {
-    return <div className="flex justify-center items-center h-48"><Loader2 className="h-8 w-8 animate-spin" /></div>;
-  }
-
-  return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSave)} className="space-y-6">
-        <div className="max-h-[60vh] overflow-y-auto pr-4 space-y-4">
-          {Object.keys(moduleLabels).map((moduleKey) => {
-            const key = moduleKey as keyof ModulePermissions;
-            if (key === 'reports' || key === 'technicians' || key === 'monitoring' || key === 'planning') return null; // Hide non-applicable modules for techs
-            return (
-              <FormField
-                key={key}
-                control={form.control}
-                name={key}
-                render={({ field }) => (
-                  <FormItem className="space-y-3 rounded-md border p-4">
-                    <FormLabel className="font-semibold">{moduleLabels[key]}</FormLabel>
-                    <FormControl>
-                      <RadioGroup onValueChange={field.onChange} value={field.value} className="flex items-center space-x-4">
-                        <FormItem className="flex items-center space-x-2 space-y-0">
-                          <FormControl><RadioGroupItem value="none" /></FormControl>
-                          <FormLabel className="font-normal">Nenhum</FormLabel>
-                        </FormItem>
-                        <FormItem className="flex items-center space-x-2 space-y-0">
-                          <FormControl><RadioGroupItem value="read" /></FormControl>
-                          <FormLabel className="font-normal">Leitura</FormLabel>
-                        </FormItem>
-                        <FormItem className="flex items-center space-x-2 space-y-0">
-                          <FormControl><RadioGroupItem value="write" /></FormControl>
-                          <FormLabel className="font-normal">Escrita</FormLabel>
-                        </FormItem>
-                      </RadioGroup>
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-            );
-          })}
-        </div>
-        <div className="flex justify-end gap-2 pt-4">
-            <Button type="button" variant="ghost" onClick={onFinished}>Cancelar</Button>
-            <Button type="submit">Salvar Permissões</Button>
-        </div>
-      </form>
-    </Form>
-  );
-}
-
-// --- Original Table Component ---
 
 const getStatusVariant = (status: Technician['status']) => {
     switch (status) {
@@ -211,55 +64,21 @@ const getStatusText = (status: Technician['status']) => {
 
 interface ActionsCellProps {
   row: any;
-  onEdit: (technician: Technician) => void;
-  onEditPermissions: (technician: Technician) => void;
-  onStatusChange: (technician: Technician, status: UserStatus) => void;
-  onViewDetails: (technician: Technician) => void;
 }
 
-const ActionsCell: React.FC<ActionsCellProps> = ({ row, onEdit, onEditPermissions, onStatusChange, onViewDetails }) => {
+const ActionsCell: React.FC<ActionsCellProps> = ({ row }) => {
   const technician = row.original as Technician;
-  const [isAlertOpen, setIsAlertOpen] = React.useState(false);
-  const [actionType, setActionType] = React.useState<'activate' | 'deactivate' | null>(null);
+  const { toast } = useToast();
 
-  const handleActionClick = (e: React.MouseEvent, type: 'activate' | 'deactivate') => {
-    e.stopPropagation();
-    setActionType(type);
-    setIsAlertOpen(true);
-  }
-  
-  const handleConfirmAction = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (actionType) {
-      onStatusChange(technician, actionType === 'activate' ? 'active' : 'inactive');
-    }
-    setIsAlertOpen(false);
-  }
-
-  const handleEditClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onEdit(technician);
-  }
-
-  const handlePermissionsClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onEditPermissions(technician);
-  }
-  
-  const handleViewDetailsClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onViewDetails(technician);
-  }
-
-  const handleCopyIdClick = (e: React.MouseEvent) => {
+  const handleCopyId = (e: React.MouseEvent) => {
     e.stopPropagation();
     navigator.clipboard.writeText(technician.id);
+    toast({ title: "ID do técnico copiado!" });
   };
 
 
   return (
-    <>
-      <DropdownMenu>
+    <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="h-8 w-8 p-0" onClick={(e) => e.stopPropagation()}>
             <span className="sr-only">Abrir menu</span>
@@ -268,47 +87,12 @@ const ActionsCell: React.FC<ActionsCellProps> = ({ row, onEdit, onEditPermission
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
           <DropdownMenuLabel>Ações</DropdownMenuLabel>
-            <DropdownMenuItem onClick={handleViewDetailsClick}>
-            Ver Detalhes
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={handleCopyIdClick}
-          >
+          <DropdownMenuItem onClick={handleCopyId}>
+              <Copy className="mr-2 h-4 w-4" />
             Copiar ID
           </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleEditClick}>
-              Editar Técnico
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handlePermissionsClick} disabled={technician.status !== 'active'}>
-              Editar Permissões
-          </DropdownMenuItem>
-          {technician.status === 'active' ? (
-              <DropdownMenuItem onClick={(e) => handleActionClick(e, 'deactivate')} className="text-destructive focus:text-destructive">
-                  Desativar
-              </DropdownMenuItem>
-          ) : (
-                <DropdownMenuItem onClick={(e) => handleActionClick(e, 'activate')}>
-                  Reativar
-              </DropdownMenuItem>
-          )}
         </DropdownMenuContent>
       </DropdownMenu>
-       <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
-            <AlertDialogContent onClick={(e) => e.stopPropagation()}>
-              <AlertDialogHeader>
-                  <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                  Você deseja {actionType === 'activate' ? 'reativar' : 'desativar'} o técnico {technician.name}?
-                  </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                  <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleConfirmAction}>Confirmar</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
-    </>
   )
 }
 
@@ -316,11 +100,10 @@ interface TechniciansTableProps {
     data: Technician[];
     sectors: Sector[];
     onSavePermissions: (userId: string, permissions: Partial<ModulePermissions>) => Promise<void>;
-    onStatusChange: (technician: Technician, status: UserStatus) => void;
-    onUpdateTechnician: (technicianId: string, values: EditTechnicianFormValues) => Promise<boolean>;
+    onUpdateTechnician: (technicianId: string, values: EditTechnicianFormValues, newStatus: UserStatus) => Promise<boolean>;
 }
 
-export function TechniciansTable({ data, sectors, onSavePermissions, onStatusChange, onUpdateTechnician }: TechniciansTableProps) {
+export function TechniciansTable({ data, sectors, onSavePermissions, onUpdateTechnician }: TechniciansTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
     []
@@ -329,29 +112,16 @@ export function TechniciansTable({ data, sectors, onSavePermissions, onStatusCha
     React.useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = React.useState({})
   const [selectedTechnician, setSelectedTechnician] = React.useState<Technician | null>(null);
-  const [isDetailsOpen, setIsDetailsOpen] = React.useState(false);
-  const [isPermissionsOpen, setIsPermissionsOpen] = React.useState(false);
   const [isEditOpen, setIsEditOpen] = React.useState(false);
   const [showInactive, setShowInactive] = React.useState(false);
-
-
-  const handleEditPermissions = (technician: Technician) => {
-    setSelectedTechnician(technician);
-    setIsPermissionsOpen(true);
-  };
 
   const handleEdit = (technician: Technician) => {
     setSelectedTechnician(technician);
     setIsEditOpen(true);
   };
   
-  const handleSavePermissions = async (userId: string, permissions: Partial<ModulePermissions>) => {
-    await onSavePermissions(userId, permissions);
-    setIsPermissionsOpen(false);
-  };
-
-  const handleSaveEdit = async (technicianId: string, values: EditTechnicianFormValues) => {
-      const success = await onUpdateTechnician(technicianId, values);
+  const handleSaveEdit = async (technicianId: string, values: EditTechnicianFormValues, newStatus: UserStatus) => {
+      const success = await onUpdateTechnician(technicianId, values, newStatus);
       if (success) {
           setIsEditOpen(false);
       }
@@ -391,8 +161,12 @@ export function TechniciansTable({ data, sectors, onSavePermissions, onStatusCha
           if (!sectorIds || sectorIds.length === 0) {
             return <div className="capitalize text-muted-foreground">N/A</div>;
           }
-          const sector = sectors.find(s => sectorIds.includes(s.id));
-          return <div className="capitalize">{sector?.name || 'N/A'}</div>;
+          const sectorNames = sectorIds.map(id => sectors.find(s => s.id === id)?.name).filter(Boolean);
+          return (
+            <div className="flex flex-wrap gap-1">
+                {sectorNames.map(name => <Badge key={name} variant="secondary">{name}</Badge>)}
+            </div>
+          )
       }
     },
     {
@@ -406,7 +180,7 @@ export function TechniciansTable({ data, sectors, onSavePermissions, onStatusCha
     {
       id: "actions",
       enableHiding: false,
-      cell: (props) => <ActionsCell {...props} onEdit={handleEdit} onEditPermissions={handleEditPermissions} onStatusChange={onStatusChange} onViewDetails={handleViewDetails} />,
+      cell: (props) => <ActionsCell {...props} />,
     },
   ]
 
@@ -429,27 +203,6 @@ export function TechniciansTable({ data, sectors, onSavePermissions, onStatusCha
     },
   })
 
-  const handleViewDetails = (technician: Technician) => {
-    setSelectedTechnician(technician);
-    setIsDetailsOpen(true);
-  }
-
-  const handleRowDoubleClick = (row: any) => {
-    handleEditPermissions(row.original);
-  }
-
-  React.useEffect(() => {
-    if (!isDetailsOpen) {
-      setSelectedTechnician(null);
-    }
-  }, [isDetailsOpen]);
-
-  React.useEffect(() => {
-    if (!isPermissionsOpen) {
-      setSelectedTechnician(null);
-    }
-  }, [isPermissionsOpen]);
-  
   React.useEffect(() => {
     if (!isEditOpen) {
       setSelectedTechnician(null);
@@ -502,13 +255,7 @@ export function TechniciansTable({ data, sectors, onSavePermissions, onStatusCha
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
-                  onDoubleClick={(e) => {
-                    const target = e.target as HTMLElement;
-                    if (target.closest('button') || target.closest('[role="menu"]')) {
-                      return;
-                    }
-                    handleRowDoubleClick(row);
-                  }}
+                  onDoubleClick={() => handleEdit(row.original)}
                   className="cursor-pointer"
                 >
                   {row.getVisibleCells().map((cell) => (
@@ -603,43 +350,39 @@ export function TechniciansTable({ data, sectors, onSavePermissions, onStatusCha
             </div>
         </div>
       </div>
-      <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Detalhes do Técnico</DialogTitle>
-            </DialogHeader>
-            {selectedTechnician && <TechnicianDetails technician={selectedTechnician} sectors={sectors} />}
-          </DialogContent>
-        </Dialog>
-        <Dialog open={isPermissionsOpen} onOpenChange={setIsPermissionsOpen}>
-            <DialogContent className="sm:max-w-lg">
-                <DialogHeader>
-                    <DialogTitle>Editar permissões de {selectedTechnician?.name}</DialogTitle>
-                    <DialogDescription>
-                        Controle quais módulos este técnico pode acessar e editar.
+        <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+          <DialogContent className="sm:max-w-xl">
+            {selectedTechnician && (
+              <>
+                 <DialogHeader>
+                    <DialogTitle>Editar Técnico: {selectedTechnician.name}</DialogTitle>
+                     <DialogDescription>
+                        <div className="flex items-center gap-2 pt-2">
+                            <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded">
+                                ID: {selectedTechnician.id}
+                            </span>
+                            <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-6 w-6"
+                                onClick={() => {
+                                    navigator.clipboard.writeText(selectedTechnician.id);
+                                    useToast().toast({ title: "ID copiado para a área de transferência." });
+                                }}
+                                >
+                                <Copy className="h-4 w-4" />
+                            </Button>
+                        </div>
                     </DialogDescription>
                 </DialogHeader>
-                {selectedTechnician && (
-                    <TechnicianPermissionsForm
-                        technician={selectedTechnician}
-                        onFinished={() => setIsPermissionsOpen(false)}
-                        onSave={onSavePermissions}
-                    />
-                )}
-            </DialogContent>
-        </Dialog>
-         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Editar Técnico</DialogTitle>
-            </DialogHeader>
-            {selectedTechnician && (
-              <EditTechnicianForm
-                technician={selectedTechnician}
-                sectors={sectors}
-                onSave={handleSaveEdit}
-                onFinished={() => setIsEditOpen(false)}
-              />
+                <EditTechnicianForm
+                    technician={selectedTechnician}
+                    sectors={sectors}
+                    onSave={handleSaveEdit}
+                    onSavePermissions={onSavePermissions}
+                    onFinished={() => setIsEditOpen(false)}
+                />
+              </>
             )}
           </DialogContent>
         </Dialog>

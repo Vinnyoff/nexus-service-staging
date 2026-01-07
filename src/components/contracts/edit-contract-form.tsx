@@ -21,37 +21,42 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import { Textarea } from "../ui/textarea";
+import { Separator } from "../ui/separator";
+import { Checkbox } from "../ui/checkbox";
 
 const formSchema = z.object({
   description: z.string().optional(),
   frequencyDays: z.coerce.number().positive({ message: "A frequência deve ser maior que zero." }),
   sectorIds: z.array(z.string()).min(1, { message: "Selecione pelo menos um setor." }),
+  status: z.enum(['active', 'inactive']),
 });
 
-export type EditContractFormValues = z.infer<typeof formSchema>;
+export type EditContractFormValues = Omit<z.infer<typeof formSchema>, 'status'>;
 
 interface EditContractFormProps {
   contract: ServiceContract;
   sectors: Sector[];
-  onSave: (contractId: string, values: EditContractFormValues) => Promise<boolean>;
+  onSave: (contractId: string, values: EditContractFormValues, newStatus: 'active' | 'inactive') => Promise<boolean>;
   onFinished: () => void;
 }
 
 export function EditContractForm({ contract, sectors, onSave, onFinished }: EditContractFormProps) {
   const [isSaving, setIsSaving] = useState(false);
 
-  const form = useForm<EditContractFormValues>({
+  const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
         description: contract.description || "",
         frequencyDays: contract.frequencyDays,
         sectorIds: contract.sectorIds,
+        status: contract.status,
     },
   });
 
-  async function onSubmit(values: EditContractFormValues) {
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSaving(true);
-    await onSave(contract.id, values);
+    const { status, ...otherValues } = values;
+    await onSave(contract.id, otherValues, status);
     setIsSaving(false);
   }
 
@@ -148,6 +153,25 @@ export function EditContractForm({ contract, sectors, onSave, onFinished }: Edit
                 </FormItem>
                 )}
             />
+            <Separator className="my-4" />
+            
+             <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-start space-x-3 space-y-0 rounded-md border p-4">
+                    <FormControl>
+                        <Checkbox
+                            checked={field.value === 'active'}
+                            onCheckedChange={(checked) => field.onChange(checked ? 'active' : 'inactive')}
+                        />
+                    </FormControl>
+                    <FormLabel className="text-base">
+                        Contrato {field.value === 'active' ? 'Ativo' : 'Inativo'}
+                    </FormLabel>
+                  </FormItem>
+                )}
+              />
         </div>
 
         <div className="flex justify-end gap-2 pt-4 border-t">
