@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useForm } from "react-hook-form";
@@ -16,11 +17,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Sector } from "@/lib/types";
 import { useAuth } from "@/hooks/use-auth";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { Dialog, DialogContent, DialogTrigger } from "../ui/dialog";
 import { cn } from "@/lib/utils";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "../ui/command";
 import { Check, ChevronsUpDown } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { ScrollArea } from "../ui/scroll-area";
 
 const formSchema = z.object({
   name: z.string().min(2, { message: "O nome é obrigatório." }),
@@ -42,6 +46,8 @@ interface NewTechnicianFormProps {
 
 export function NewTechnicianForm({ onSave, onFinished, sectors }: NewTechnicianFormProps) {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
+  const [sectorSearch, setSectorSearch] = useState('');
   
   const form = useForm<NewTechnicianFormValues>({
     resolver: zodResolver(formSchema),
@@ -71,6 +77,42 @@ export function NewTechnicianForm({ onSave, onFinished, sectors }: NewTechnician
     return [];
   }, [user, sectors]);
 
+  const filteredSectors = useMemo(() => {
+    if (!sectorSearch) return visibleSectors;
+    return visibleSectors.filter(s => s.name.toLowerCase().includes(sectorSearch.toLowerCase()));
+  }, [sectorSearch, visibleSectors]);
+
+  const SectorSelectorContent = ({ onSelect }: { onSelect: (id: string) => void }) => (
+    <Command>
+      <CommandInput 
+        placeholder="Buscar setor..."
+        value={sectorSearch}
+        onValueChange={setSectorSearch}
+      />
+      <CommandEmpty>Nenhum setor encontrado.</CommandEmpty>
+      <CommandGroup>
+        <ScrollArea className="h-48">
+          {filteredSectors.map((sector) => (
+            <CommandItem
+              value={sector.name}
+              key={sector.id}
+              onSelect={() => onSelect(sector.id)}
+            >
+              <Check
+                className={cn(
+                  "mr-2 h-4 w-4",
+                  form.watch('sectorIds')?.includes(sector.id)
+                    ? "opacity-100"
+                    : "opacity-0"
+                )}
+              />
+              {sector.name}
+            </CommandItem>
+          ))}
+        </ScrollArea>
+      </CommandGroup>
+    </Command>
+  );
 
   return (
     <Form {...form}>
@@ -165,60 +207,25 @@ export function NewTechnicianForm({ onSave, onFinished, sectors }: NewTechnician
               render={({ field }) => (
                  <FormItem className="flex flex-col">
                     <FormLabel>Setores</FormLabel>
-                     <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
+                    
+                    <FormControl>
+                        <Button
+                            type="button"
                             variant="outline"
                             role="combobox"
                             className={cn(
-                              "w-full justify-between",
-                              !field.value?.length && "text-muted-foreground"
+                            "w-full justify-between",
+                            !field.value?.length && "text-muted-foreground"
                             )}
-                          >
+                        >
                             {field.value && field.value.length > 0
-                              ? `${field.value.length} setor(es) selecionado(s)`
-                              : "Selecione os setores"}
+                            ? `${field.value.length} setor(es) selecionado(s)`
+                            : "Selecione os setores"}
                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-full p-0">
-                        <Command>
-                          <CommandInput placeholder="Buscar setor..." />
-                          <CommandEmpty>Nenhum setor encontrado.</CommandEmpty>
-                          <CommandGroup>
-                            <CommandList>
-                                {visibleSectors.map((sector) => (
-                                <CommandItem
-                                    value={sector.name}
-                                    key={sector.id}
-                                    onSelect={() => {
-                                    const currentIds = field.value || [];
-                                    const newIds = currentIds.includes(sector.id)
-                                        ? currentIds.filter((id) => id !== sector.id)
-                                        : [...currentIds, sector.id];
-                                    field.onChange(newIds);
-                                    }}
-                                >
-                                    <Check
-                                    className={cn(
-                                        "mr-2 h-4 w-4",
-                                        field.value?.includes(sector.id)
-                                        ? "opacity-100"
-                                        : "opacity-0"
-                                    )}
-                                    />
-                                    {sector.name}
-                                </CommandItem>
-                                ))}
-                            </CommandList>
-                          </CommandGroup>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                </FormItem>
+                        </Button>
+                    </FormControl>
+                    
+                    </FormItem>
               )}
             />
         </div>
@@ -230,3 +237,4 @@ export function NewTechnicianForm({ onSave, onFinished, sectors }: NewTechnician
     </Form>
   );
 }
+
