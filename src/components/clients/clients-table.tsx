@@ -14,17 +14,9 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table"
-import { ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, MoreHorizontal } from "lucide-react"
+import { ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Copy, MoreHorizontal } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import {
   Table,
@@ -40,102 +32,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { ClientDetails } from "./client-details"
 import { Checkbox } from "../ui/checkbox"
 import { Label } from "../ui/label"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "../ui/alert-dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select"
 import { EditClientForm, EditClientFormValues } from "./edit-client-form"
+import { useToast } from "@/hooks/use-toast"
 
-type ActionType = 'activate' | 'deactivate';
-
-const ActionsCell = ({ row, onStatusChange, onEdit, onViewDetails }: { row: any, onStatusChange: (client: Client, status: 'active' | 'inactive') => void, onEdit: (client: Client) => void, onViewDetails: (client: Client) => void }) => {
-  const client = row.original as Client
-  const [isAlertOpen, setIsAlertOpen] = React.useState(false);
-  const [actionType, setActionType] = React.useState<ActionType | null>(null);
-
-  const handleActionClick = (e: React.MouseEvent, type: ActionType) => {
-    e.stopPropagation();
-    setActionType(type);
-    setIsAlertOpen(true);
-  }
-
-  const handleConfirmAction = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (actionType) {
-      onStatusChange(client, actionType === 'activate' ? 'active' : 'inactive');
-    }
-    setIsAlertOpen(false);
-  }
-  
-  const handleEditClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onEdit(client);
-  }
-
-  const handleViewDetailsClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onViewDetails(client);
-  };
-
-  const handleCopyIdClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(client.id);
-  };
-
-
-  return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="h-8 w-8 p-0" onClick={(e) => e.stopPropagation()}>
-            <span className="sr-only">Abrir menu</span>
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-          <DropdownMenuLabel>Ações</DropdownMenuLabel>
-          <DropdownMenuItem onClick={handleViewDetailsClick}>Ver Detalhes</DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={handleCopyIdClick}
-          >
-            Copiar ID
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleEditClick}>Editar</DropdownMenuItem>
-          {client.status === 'active' ? (
-              <DropdownMenuItem onClick={(e) => handleActionClick(e, 'deactivate')} className="text-destructive focus:text-destructive">
-                  Desativar
-              </DropdownMenuItem>
-          ) : (
-              <DropdownMenuItem onClick={(e) => handleActionClick(e, 'activate')}>
-                  Reativar
-              </DropdownMenuItem>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-       <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
-        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Você deseja {actionType === 'activate' ? 'reativar' : 'desativar'} o cliente {client.name}?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmAction}>Confirmar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
-  )
-}
 
 interface ClientsTableProps {
     data: Client[];
-    onStatusChange: (client: Client, status: 'active' | 'inactive') => void;
-    onUpdateClient: (clientId: string, values: EditClientFormValues) => Promise<boolean>;
+    onUpdateClient: (clientId: string, values: EditClientFormValues, newStatus: 'active' | 'inactive') => Promise<boolean>;
 }
 
-export function ClientsTable({ data, onStatusChange, onUpdateClient }: ClientsTableProps) {
+export function ClientsTable({ data, onUpdateClient }: ClientsTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([
     { id: 'name', desc: false } // Default sort by name ascending
   ])
@@ -145,25 +52,14 @@ export function ClientsTable({ data, onStatusChange, onUpdateClient }: ClientsTa
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = React.useState({})
-  const [selectedClient, setSelectedClient] = React.useState<Client | null>(null);
-  const [isDetailsOpen, setIsDetailsOpen] = React.useState(false);
-  const [isEditOpen, setIsEditOpen] = React.useState(false);
+  const [editingClient, setEditingClient] = React.useState<Client | null>(null);
   const [showInactive, setShowInactive] = React.useState(false);
+  const { toast } = useToast();
 
-  const handleEdit = (client: Client) => {
-    setSelectedClient(client);
-    setIsEditOpen(true);
-  };
-  
-  const handleViewDetails = (client: Client) => {
-    setSelectedClient(client);
-    setIsDetailsOpen(true);
-  }
-
-  const handleSaveEdit = async (clientId: string, values: EditClientFormValues) => {
-      const success = await onUpdateClient(clientId, values);
+  const handleSaveEdit = async (clientId: string, values: EditClientFormValues, newStatus: 'active' | 'inactive') => {
+      const success = await onUpdateClient(clientId, values, newStatus);
       if (success) {
-          setIsEditOpen(false);
+          setEditingClient(null);
       }
   };
 
@@ -197,14 +93,9 @@ export function ClientsTable({ data, onStatusChange, onUpdateClient }: ClientsTa
           <Badge variant={row.getValue("status") === 'active' ? "default" : "destructive"} className="capitalize">{row.getValue("status") === 'active' ? 'Ativo' : 'Inativo'}</Badge>
         ),
       },
-      {
-        id: "actions",
-        enableHiding: false,
-        cell: ({ row }) => <ActionsCell row={row} onStatusChange={onStatusChange} onEdit={handleEdit} onViewDetails={handleViewDetails} />,
-      },
     ];
     return columns;
-  }, [onStatusChange]);
+  }, []);
 
   const filteredData = React.useMemo(() => {
     if (showInactive) return data;
@@ -230,15 +121,10 @@ export function ClientsTable({ data, onStatusChange, onUpdateClient }: ClientsTa
     },
   })
 
-  const handleRowDoubleClick = (row: any) => {
-    handleEdit(row.original);
+  const handleRowDoubleClick = (client: Client) => {
+    setEditingClient(client);
   }
 
-  React.useEffect(() => {
-    if (!isDetailsOpen) {
-      setSelectedClient(null);
-    }
-  }, [isDetailsOpen]);
 
   return (
     <div className="w-full">
@@ -286,18 +172,11 @@ export function ClientsTable({ data, onStatusChange, onUpdateClient }: ClientsTa
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
-                  onDoubleClick={(e) => {
-                    const target = e.target as HTMLElement;
-                    // Previne que o duplo clique seja acionado se o clique foi em um botão ou dentro de um menu
-                    if (target.closest('button') || target.closest('[role="menu"]')) {
-                      return;
-                    }
-                    handleRowDoubleClick(row);
-                  }}
+                  onDoubleClick={() => handleRowDoubleClick(row.original)}
                   className="cursor-pointer"
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} onClick={(e) => { if(cell.column.id === 'actions') { e.stopPropagation(); }}}>
+                    <TableCell key={cell.id}>
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()
@@ -388,23 +267,38 @@ export function ClientsTable({ data, onStatusChange, onUpdateClient }: ClientsTa
             </div>
         </div>
       </div>
-      <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-          <DialogContent className="sm:max-w-xl">
-            <DialogHeader>
-              <DialogTitle>Detalhes do Cliente</DialogTitle>
-            </DialogHeader>
-            {selectedClient && <ClientDetails client={selectedClient} />}
-          </DialogContent>
-        </Dialog>
-        <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-          <DialogContent className="sm:max-w-xl">
-            <DialogHeader>
-              <DialogTitle>Editar Cliente</DialogTitle>
-              <DialogDescription>Altere as informações do cliente {selectedClient?.name}.</DialogDescription>
-            </DialogHeader>
-            {selectedClient && <EditClientForm client={selectedClient} onSave={handleSaveEdit} onFinished={() => setIsEditOpen(false)} />}
-          </DialogContent>
-        </Dialog>
+      <Dialog open={!!editingClient} onOpenChange={(isOpen) => !isOpen && setEditingClient(null)}>
+        <DialogContent className="sm:max-w-4xl">
+            {editingClient && (
+              <>
+                <DialogHeader>
+                  <DialogTitle>Editando Cliente: {editingClient.name}</DialogTitle>
+                  <div className="flex items-center gap-2 pt-2">
+                    <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded">
+                      ID: {editingClient.id}
+                    </span>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-6 w-6"
+                      onClick={() => {
+                        navigator.clipboard.writeText(editingClient.id);
+                        toast({ title: "ID copiado para a área de transferência." });
+                      }}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </DialogHeader>
+                <EditClientForm 
+                    client={editingClient} 
+                    onSave={handleSaveEdit} 
+                    onFinished={() => setEditingClient(null)} 
+                />
+              </>
+            )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

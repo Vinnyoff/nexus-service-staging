@@ -17,6 +17,8 @@ import { Input } from "@/components/ui/input";
 import { useState } from "react";
 import { Client } from "@/lib/types";
 import { Loader2 } from "lucide-react";
+import { Checkbox } from "../ui/checkbox";
+import { Separator } from "../ui/separator";
 
 const formSchema = z.object({
   name: z.string().min(2, { message: "O nome é obrigatório." }),
@@ -33,21 +35,22 @@ const formSchema = z.object({
   euroInfoId: z.string().optional(),
   rondoInfoId: z.string().optional(),
   slaHours: z.coerce.number().optional(),
+  status: z.enum(['active', 'inactive']),
 });
 
 
-export type EditClientFormValues = z.infer<typeof formSchema>;
+export type EditClientFormValues = Omit<z.infer<typeof formSchema>, 'status'>;
 
 interface EditClientFormProps {
   client: Client;
-  onSave: (clientId: string, values: EditClientFormValues) => Promise<boolean>;
+  onSave: (clientId: string, values: EditClientFormValues, newStatus: 'active' | 'inactive') => Promise<boolean>;
   onFinished: () => void;
 }
 
 export function EditClientForm({ client, onSave, onFinished }: EditClientFormProps) {
   const [isSaving, setIsSaving] = useState(false);
 
-  const form = useForm<EditClientFormValues>({
+  const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
         name: client.name,
@@ -57,12 +60,14 @@ export function EditClientForm({ client, onSave, onFinished }: EditClientFormPro
         euroInfoId: client.euroInfoId,
         rondoInfoId: client.rondoInfoId,
         slaHours: client.slaHours,
+        status: client.status,
     },
   });
 
-  async function onSubmit(values: EditClientFormValues) {
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSaving(true);
-    await onSave(client.id, values);
+    const { status, ...otherValues } = values;
+    await onSave(client.id, otherValues, status);
     setIsSaving(false);
   }
 
@@ -238,6 +243,26 @@ export function EditClientForm({ client, onSave, onFinished }: EditClientFormPro
                     )}
                 />
             </div>
+            
+            <Separator className="my-4" />
+            
+             <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-start space-x-3 space-y-0 rounded-md border p-4">
+                    <FormControl>
+                        <Checkbox
+                            checked={field.value === 'active'}
+                            onCheckedChange={(checked) => field.onChange(checked ? 'active' : 'inactive')}
+                        />
+                    </FormControl>
+                    <FormLabel className="text-base">
+                        Cliente {field.value === 'active' ? 'Ativo' : 'Inativo'}
+                    </FormLabel>
+                  </FormItem>
+                )}
+              />
         </div>
 
         <div className="flex justify-end gap-2 pt-4 border-t">
