@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { CalendarIcon, ArrowLeft, ArrowRight, Loader2, List, Check, Search, ChevronsUpDown, AlertTriangle } from "lucide-react";
 import { format, addHours } from "date-fns";
@@ -35,6 +36,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import React from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const formSchema = z.object({
   clientId: z.string().optional(),
@@ -85,6 +87,7 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
     const [openClientSelector, setOpenClientSelector] = useState(false);
     const [clientSearch, setClientSearch] = useState("");
     const [isSaving, setIsSaving] = useState(false);
+    const isMobile = useIsMobile();
 
 
     // SLA State
@@ -734,35 +737,67 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                             render={({ field }) => (
                             <FormItem className="flex flex-col">
                                 <FormLabel>Agendar Data (Opcional)</FormLabel>
-                                <Popover>
-                                <PopoverTrigger asChild>
-                                    <FormControl>
-                                    <Button
-                                        variant={"outline"}
-                                        className={cn(
-                                        "w-full pl-3 text-left font-normal",
-                                        !field.value && "text-muted-foreground"
-                                        )}
-                                    >
-                                        {field.value ? (
-                                        format(field.value, "PPP", { locale: ptBR })
-                                        ) : (
-                                        <span>Escolha uma data</span>
-                                        )}
-                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                    </Button>
-                                    </FormControl>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start">
-                                    <Calendar
-                                    mode="single"
-                                    selected={field.value}
-                                    onSelect={field.onChange}
-                                    initialFocus
-                                    locale={ptBR}
-                                    />
-                                </PopoverContent>
-                                </Popover>
+                                {isMobile ? (
+                                    <Dialog>
+                                        <DialogTrigger asChild>
+                                            <FormControl>
+                                            <Button
+                                                variant={"outline"}
+                                                className={cn(
+                                                "w-full pl-3 text-left font-normal",
+                                                !field.value && "text-muted-foreground"
+                                                )}
+                                            >
+                                                {field.value ? (
+                                                format(field.value, "PPP", { locale: ptBR })
+                                                ) : (
+                                                <span>Escolha uma data</span>
+                                                )}
+                                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                            </Button>
+                                            </FormControl>
+                                        </DialogTrigger>
+                                        <DialogContent className="w-auto">
+                                             <Calendar
+                                                mode="single"
+                                                selected={field.value}
+                                                onSelect={field.onChange}
+                                                initialFocus
+                                                locale={ptBR}
+                                                />
+                                        </DialogContent>
+                                    </Dialog>
+                                ) : (
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <FormControl>
+                                            <Button
+                                                variant={"outline"}
+                                                className={cn(
+                                                "w-full pl-3 text-left font-normal",
+                                                !field.value && "text-muted-foreground"
+                                                )}
+                                            >
+                                                {field.value ? (
+                                                format(field.value, "PPP", { locale: ptBR })
+                                                ) : (
+                                                <span>Escolha uma data</span>
+                                                )}
+                                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                            </Button>
+                                            </FormControl>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0" align="start">
+                                            <Calendar
+                                            mode="single"
+                                            selected={field.value}
+                                            onSelect={field.onChange}
+                                            initialFocus
+                                            locale={ptBR}
+                                            />
+                                        </PopoverContent>
+                                    </Popover>
+                                )}
                                 <FormMessage />
                             </FormItem>
                             )}
