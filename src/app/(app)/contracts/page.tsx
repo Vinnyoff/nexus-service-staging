@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Loader2 } from "lucide-react";
+import { PlusCircle, Loader2, RefreshCw } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -13,14 +13,15 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { ServiceContract, Client, Sector, ExternalTicket } from "@/lib/types";
-import { collection, addDoc, onSnapshot, doc, updateDoc, writeBatch } from "firebase/firestore";
+import { collection, addDoc, onSnapshot, doc, updateDoc, writeBatch, getDoc } from "firebase/firestore";
 import { db } from "@/firebase/config";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { ContractsTable } from "@/components/contracts/contracts-table";
 import { NewContractForm, NewContractFormValues } from "@/components/contracts/new-contract-form";
 import { EditContractForm, EditContractFormValues } from "@/components/contracts/edit-contract-form";
-import { addDays } from "date-fns";
+import { generatePreventiveTickets } from "@/lib/services/preventive-maintenance-service";
+
 
 export default function ContractsPage() {
   const [isNewDialogOpen, setIsNewDialogOpen] = useState(false);
@@ -28,6 +29,7 @@ export default function ContractsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isChecking, setIsChecking] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -97,15 +99,6 @@ export default function ContractsPage() {
       const contractRef = doc(collection(db, "serviceContracts"));
       batch.set(contractRef, newContractData);
       
-      // Update the client document with the contract info
-      const clientRef = doc(db, "clients", client.id);
-      batch.update(clientRef, {
-        preventiveContract: {
-          sectorIds: values.sectorIds,
-          frequencyDays: values.frequencyDays,
-        }
-      });
-      
       // Create an immediate "start" ticket for each sector in the contract
       for (const sectorId of values.sectorIds) {
           const ticketRef = doc(collection(db, "external-tickets"));
@@ -152,9 +145,7 @@ export default function ContractsPage() {
     const contractRef = doc(db, "serviceContracts", contractId);
     
     try {
-        const contractSnap = await getDoc(contractRef).get();
-        const contractData = contractSnap.data() as ServiceContract;
-        const clientRef = doc(db, "clients", contractData.clientId);
+        const contractSnap = await getDoc(contractRef);
         
         const updatedData = { 
             ...values,
@@ -162,10 +153,6 @@ export default function ContractsPage() {
         };
 
         batch.update(contractRef, updatedData);
-        batch.update(clientRef, {
-           'preventiveContract.frequencyDays': values.frequencyDays,
-           'preventiveContract.sectorIds': values.sectorIds,
-        });
 
         await batch.commit();
         toast({ title: "Contrato atualizado com sucesso!" });
@@ -195,28 +182,58 @@ export default function ContractsPage() {
     }
   };
 
+  const handleManualCheck = async () => {
+    setIsChecking(true);
+    toast({ title: "Verificando preventivas...", description: "Aguarde, o sistema está buscando por chamados vencidos."});
+    try {
+      const result = await generatePreventiveTickets();
+      if (result.createdTicketsCount > 0) {
+        toast({
+          title: "Verificação Concluída!",
+          description: `${result.createdTicketsCount} novo(s) chamado(s) preventivo(s) foram criados.`
+        });
+      } else {
+        toast({
+          title: "Nenhuma Pendência",
+          description: "Não há chamados preventivos vencidos para serem criados no momento."
+        });
+      }
+    } catch (error) {
+      console.error("Error during manual check:", error);
+      toast({ variant: 'destructive', title: "Erro na verificação", description: "Ocorreu um erro ao executar a verificação manual." });
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
   return (
     <>
       <PageHeader title="Contratos de Serviço" description="Gerencie os contratos de manutenção preventiva dos clientes.">
-        <Dialog open={isNewDialogOpen} onOpenChange={setIsNewDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Novo Contrato
+        <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={handleManualCheck} disabled={isChecking}>
+                {isChecking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                Verificar Preventivas Agora
             </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-xl">
-            <DialogHeader>
-              <DialogTitle>Novo Contrato de Serviço</DialogTitle>
-            </DialogHeader>
-            <NewContractForm 
-                clients={clients.filter(c => c.status === 'active')} 
-                sectors={sectors.filter(s => s.status === 'active')}
-                onSave={handleAddContract} 
-                onFinished={() => setIsNewDialogOpen(false)} 
-            />
-          </DialogContent>
-        </Dialog>
+            <Dialog open={isNewDialogOpen} onOpenChange={setIsNewDialogOpen}>
+            <DialogTrigger asChild>
+                <Button>
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Novo Contrato
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-xl">
+                <DialogHeader>
+                <DialogTitle>Novo Contrato de Serviço</DialogTitle>
+                </DialogHeader>
+                <NewContractForm 
+                    clients={clients.filter(c => c.status === 'active')} 
+                    sectors={sectors.filter(s => s.status === 'active')}
+                    onSave={handleAddContract} 
+                    onFinished={() => setIsNewDialogOpen(false)} 
+                />
+            </DialogContent>
+            </Dialog>
+        </div>
       </PageHeader>
       {loading ? (
         <div className="flex justify-center items-center h-64">

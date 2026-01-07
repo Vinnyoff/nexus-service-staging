@@ -59,14 +59,14 @@ export async function generatePreventiveTickets() {
     
     const clientDoc = await getDoc(doc(db, "clients", contract.clientId));
     if (!clientDoc.exists()) continue;
-    const clientData = clientDoc.data() as Client;
+    const clientData = { id: clientDoc.id, ...clientDoc.data()} as Client;
 
     for (const sectorId of contract.sectorIds) {
       const lastTicket = await findLastPreventiveTicket(clientData.id, sectorId);
       
       // Se não houver nenhum chamado anterior (primeira preventiva após o inicial),
       // use a data de criação do contrato como base.
-      const lastEventDate = lastTicket?.updatedAt ? parseISO(lastTicket.updatedAt) : parseISO(contract.createdAt);
+      const lastEventDate = lastTicket?.updatedAt ? new Date(lastTicket.updatedAt) : new Date(contract.createdAt);
       const daysSinceLastEvent = differenceInDays(today, lastEventDate);
 
       if (daysSinceLastEvent >= contract.frequencyDays) {
