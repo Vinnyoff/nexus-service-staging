@@ -63,7 +63,10 @@ const formSchema = z.object({
   customSlaHours: z.coerce.number().optional(),
 }).refine(data => data.isStandard || data.isContract || data.isUrgent, {
     message: "Selecione pelo menos um tipo de atendimento.",
-    path: ["isStandard"], // You can point to any of the fields
+    path: ["isStandard"],
+}).refine(data => !(data.isStandard && data.isContract), {
+    message: "Os tipos 'Padrão' e 'Contrato' não podem ser selecionados juntos.",
+    path: ["isStandard"],
 });
 
 export type NewExternalTicketFormValues = z.infer<typeof formSchema>;
@@ -876,4 +879,3 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
         </Form>
     );
 }
-
