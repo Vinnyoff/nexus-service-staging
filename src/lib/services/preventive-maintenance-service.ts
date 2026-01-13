@@ -85,7 +85,7 @@ export async function generatePreventiveTickets() {
           requesterName: 'Sistema (Preventiva Automática)',
           sectorId: sectorId,
           creatorId: 'system',
-          description: "visita de manutenção preventiva de contrato de serviço",
+          description: "Manutenção preventiva de contrato.",
           type: 'contrato',
           status: 'pendente',
           createdAt: new Date().toISOString(),

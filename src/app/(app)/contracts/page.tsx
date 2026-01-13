@@ -99,7 +99,7 @@ export default function ContractsPage() {
               requesterName: 'Sistema (Criação de Contrato)',
               sectorId: sectorId,
               creatorId: user.id,
-              description: `Chamado inicial de configuração do contrato ${contractRef.id.substring(0, 5)}.`,
+              description: `Manutenção preventiva de contrato.`,
               type: 'contrato',
               status: 'pendente',
               createdAt: now.toISOString(),
