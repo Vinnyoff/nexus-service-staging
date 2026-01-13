@@ -88,11 +88,13 @@ export function ExternalTicketCard({
   const isCurrentUserAssigned = currentUser?.id === ticket.technicianId;
   const hasComments = ticket.comments && ticket.comments.length > 0;
 
+  const isUserInSector = currentUser?.role === 'encarregado' && ticket.sectorId && currentUser.sectorIds?.includes(ticket.sectorId);
+
   const canUserIntervene = currentUser && (
     isCurrentUserAssigned ||
     currentUser.role === 'admin' ||
     currentUser.role === 'gerente' ||
-    (currentUser.role === 'encarregado' && ticket.sectorId && currentUser.sectorIds?.includes(ticket.sectorId))
+    isUserInSector
   );
 
 
