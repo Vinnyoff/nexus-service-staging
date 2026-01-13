@@ -230,23 +230,29 @@ export default function ExternalTicketsPage() {
       const docRef = await addDoc(collection(db, "external-tickets"), newTicketData);
       
       const sector = sectors.find(s => s.id === newTicketData.sectorId);
-      const sectorName = sector?.name || 'Não informado';
       const sectorGroupId = sector?.whatsappGroupId;
       
-      let messageStatusText = "Status: Pendente";
+      let messageStatusText = `Status: ${newTicketData.status === 'pendente' ? 'Pendente' : `Em andamento por ${user.name}`}`;
       const assignedTechnician = technicians.find(t => t.id === newTicketData.technicianId);
 
       if (newTicketData.technicianId && assignedTechnician) {
           messageStatusText = `Status: Em andamento por ${assignedTechnician.name}`;
       }
       
-      let message = `⚠️ Novo Chamado Criado ⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${newTicketData.client.name}\n*Contato:* ${newTicketData.client.phone || 'N/A'}\n*Endereço:* ${newTicketData.client.address || 'N/A'}\n*Solicitante:* ${newTicketData.requesterName || 'N/A'}\n\n*Descrição:* ${newTicketData.description}\n\n*Tipo:* ${newTicketData.type}`;
-      
+      let message = `⚠️ Novo Chamado Criado ⚠️\n\n`
+          + `Cliente: ${newTicketData.client.name}\n`
+          + `Contato: ${newTicketData.client.phone || 'N/A'}\n`
+          + `Solicitante: ${newTicketData.requesterName || 'N/A'}\n`
+          + `Endereço: ${newTicketData.client.address || 'N/A'}\n\n`
+          + `Descrição: ${newTicketData.description}\n\n`
+          + `Tipo: ${newTicketData.type}`;
+
       if (newTicketData.type === 'contrato' && newTicketData.priority) {
-        message += `\n*Prioridade do Contrato:* ${newTicketData.priority}`;
+        message += `\nPrioridade do Contrato: 🚨${newTicketData.priority}`;
       }
 
-      message += `\n*${messageStatusText}\n*Atribuído por:* ${user.name}`;
+      message += `\nAtribuído por: ${user.name}\n\n`
+               + `${messageStatusText}`;
 
       if (newTicketData.technicianId) {
         const techUser = users.find(u => u.id === assignedTechnician?.userId);

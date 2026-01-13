@@ -113,7 +113,6 @@ export default function ExternalTicketDetailsPage() {
         const assignedTechnician = technicians.find(t => t.id === technicianId);
         const techUser = users.find(u => u.id === assignedTechnician?.userId);
         const sector = allSectors.find(s => s.id === ticket.sectorId);
-        const sectorName = sector?.name || 'Não informado';
         const sectorGroupId = sector?.whatsappGroupId;
         
         await updateDoc(ticketRef, {
@@ -122,13 +121,20 @@ export default function ExternalTicketDetailsPage() {
             updatedAt: new Date().toISOString(),
         });
         
-        let message = `⚠️ Novo Chamado Criado ⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Tipo:* ${ticket.type}`;
+        let message = `⚠️ Novo Chamado Criado ⚠️\n\n`
+          + `Cliente: ${ticket.client.name}\n`
+          + `Contato: ${ticket.client.phone || 'N/A'}\n`
+          + `Solicitante: ${ticket.requesterName || 'N/A'}\n`
+          + `Endereço: ${ticket.client.address || 'N/A'}\n\n`
+          + `Descrição: ${ticket.description}\n\n`
+          + `Tipo: ${ticket.type}`;
 
         if (ticket.type === 'contrato' && ticket.priority) {
-            message += `\n*Prioridade do Contrato:* ${ticket.priority}`;
+            message += `\nPrioridade do Contrato: 🚨${ticket.priority}`;
         }
         
-        message += `\n*Status:* Em andamento por ${assignedTechnician?.name}\n*Atribuído por:* ${user.name}`;
+        message += `\nAtribuído por: ${user.name}\n\n`
+                 + `Status: Em andamento por ${assignedTechnician?.name}`;
 
         if (techUser?.phone) {
             await sendWhatsappMessage(techUser.phone, message, techUser.id, `/external-tickets/${ticket.id}`);
@@ -329,7 +335,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
         <ExternalTicketDetails 
             ticket={ticket} 
             onAddComment={handleAddComment}
-            onReopenTicket={onReopenTicket}
+            onReopenTicket={handleReopenTicket}
             onAssignToMe={handleAssignTicketToCurrentUser}
             onFinalizeTicket={handleFinalizeTicket}
             onReturnToPending={handleReturnToPending}
@@ -344,5 +350,3 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
     </>
   );
 }
-
-    
