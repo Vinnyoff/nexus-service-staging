@@ -66,14 +66,14 @@ const formSchema = z.object({
         ctx.addIssue({
             code: z.ZodIssueCode.custom,
             message: "Selecione pelo menos um tipo de atendimento.",
-            path: ["isStandard"], // Path to show the error under
+            path: ["isStandard"],
         });
     }
     if (data.isStandard && data.isContract) {
         ctx.addIssue({
             code: z.ZodIssueCode.custom,
             message: "Os tipos 'Padrão' e 'Contrato' não podem ser selecionados juntos.",
-            path: ["isContract"], // Path to show the error under
+            path: ["isContract"],
         });
     }
 });
@@ -237,7 +237,7 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
         let fieldsToValidate: (keyof NewExternalTicketFormValues)[] = [];
     
         if (currentStep === 1) {
-            fieldsToValidate = ['clientName', 'description', 'isStandard', 'isContract'];
+            fieldsToValidate = ['clientName', 'description', 'isStandard', 'isContract', 'isUrgent'];
         } else if (currentStep === 2) {
             if (addressMode === 'manual') {
                 fieldsToValidate.push('address.street', 'address.neighborhood', 'address.city', 'address.state');
@@ -449,7 +449,12 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                                     <FormControl>
                                     <Checkbox
                                         checked={field.value}
-                                        onCheckedChange={field.onChange}
+                                        onCheckedChange={(checked) => {
+                                            field.onChange(checked);
+                                            if (checked) {
+                                                form.setValue('isContract', false);
+                                            }
+                                        }}
                                     />
                                     </FormControl>
                                     <FormLabel className="font-normal">
@@ -466,7 +471,12 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                                     <FormControl>
                                     <Checkbox
                                         checked={field.value}
-                                        onCheckedChange={field.onChange}
+                                        onCheckedChange={(checked) => {
+                                            field.onChange(checked);
+                                            if (checked) {
+                                                form.setValue('isStandard', false);
+                                            }
+                                        }}
                                     />
                                     </FormControl>
                                     <FormLabel className="font-normal">
@@ -493,7 +503,7 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                                 )}
                             />
                         </div>
-                         <FormMessage>{form.formState.errors.isStandard?.message || form.formState.errors.isContract?.message}</FormMessage>
+                         <FormMessage>{form.formState.errors.isStandard?.message || form.formState.errors.isContract?.message || form.formState.errors.isUrgent?.message}</FormMessage>
                     </div>
                     
                     <FormField
