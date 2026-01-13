@@ -102,7 +102,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <NavLinks />
           </SidebarContent>
           <SidebarSeparator />
-          <SidebarFooter className={cn("p-2", sidebar?.state === 'collapsed' && 'hidden')}>
+          <SidebarFooter className="p-2 group-data-[state=collapsed]:hidden">
               <div className="text-center text-xs text-muted-foreground space-y-1">
                   <p>&copy; {new Date().getFullYear()} Euroinfo</p>
                   <p>
