@@ -61,12 +61,21 @@ const formSchema = z.object({
   scheduledToTime: z.string().optional(),
   hasCustomSla: z.boolean().default(false),
   customSlaHours: z.coerce.number().optional(),
-}).refine(data => data.isStandard || data.isContract || data.isUrgent, {
-    message: "Selecione pelo menos um tipo de atendimento.",
-    path: ["isStandard"],
-}).refine(data => !(data.isStandard && data.isContract), {
-    message: "Os tipos 'Padrão' e 'Contrato' não podem ser selecionados juntos.",
-    path: ["isStandard"],
+}).superRefine((data, ctx) => {
+    if (!data.isStandard && !data.isContract && !data.isUrgent) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Selecione pelo menos um tipo de atendimento.",
+            path: ["isStandard"], // Path to show the error under
+        });
+    }
+    if (data.isStandard && data.isContract) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Os tipos 'Padrão' e 'Contrato' não podem ser selecionados juntos.",
+            path: ["isContract"], // Path to show the error under
+        });
+    }
 });
 
 export type NewExternalTicketFormValues = z.infer<typeof formSchema>;
@@ -228,7 +237,7 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
         let fieldsToValidate: (keyof NewExternalTicketFormValues)[] = [];
     
         if (currentStep === 1) {
-            fieldsToValidate = ['clientName', 'description', 'isStandard'];
+            fieldsToValidate = ['clientName', 'description', 'isStandard', 'isContract'];
         } else if (currentStep === 2) {
             if (addressMode === 'manual') {
                 fieldsToValidate.push('address.street', 'address.neighborhood', 'address.city', 'address.state');
@@ -484,7 +493,7 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                                 )}
                             />
                         </div>
-                         <FormMessage>{form.formState.errors.isStandard?.message}</FormMessage>
+                         <FormMessage>{form.formState.errors.isStandard?.message || form.formState.errors.isContract?.message}</FormMessage>
                     </div>
                     
                     <FormField
