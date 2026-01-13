@@ -63,6 +63,13 @@ const formSchema = z.object({
   hasCustomSla: z.boolean().default(false),
   customSlaHours: z.coerce.number().optional(),
 }).superRefine((data, ctx) => {
+    if (data.isStandard && data.isContract) {
+         ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Apenas 'Padrão' ou 'Contrato' pode ser selecionado, não ambos.",
+            path: ["isStandard"],
+        });
+    }
     if (!data.isStandard && !data.isContract) {
         ctx.addIssue({
             code: z.ZodIssueCode.custom,
@@ -513,10 +520,6 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                                         defaultValue={field.value}
                                         className="flex flex-wrap gap-x-4 gap-y-2"
                                     >
-                                        <FormItem className="flex items-center space-x-2 space-y-0">
-                                        <FormControl><RadioGroupItem value="Básica" /></FormControl>
-                                        <FormLabel className="font-normal">Básica</FormLabel>
-                                        </FormItem>
                                         <FormItem className="flex items-center space-x-2 space-y-0">
                                         <FormControl><RadioGroupItem value="Normal" /></FormControl>
                                         <FormLabel className="font-normal">Normal</FormLabel>
