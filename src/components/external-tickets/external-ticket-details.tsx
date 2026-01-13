@@ -398,7 +398,7 @@ export function ExternalTicketDetails({
                             </div>
                             <AlertDialogFooter>
                                 <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleReopenTicket(ticket.id, reason)} disabled={!reason.trim()}>
+                                <AlertDialogAction onClick={() => onReopenTicket(ticket.id, reason)} disabled={!reason.trim()}>
                                     Confirmar e Reabrir
                                 </AlertDialogAction>
                             </AlertDialogFooter>
@@ -533,7 +533,7 @@ export function ExternalTicketDetails({
                             </div>
                             <AlertDialogFooter>
                                 <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleReturnToPending(ticket.id, reason)} disabled={!reason.trim()}>
+                                <AlertDialogAction onClick={() => onReturnToPending(ticket.id, reason)} disabled={!reason.trim()}>
                                     Confirmar e Devolver
                                 </AlertDialogAction>
                             </AlertDialogFooter>
