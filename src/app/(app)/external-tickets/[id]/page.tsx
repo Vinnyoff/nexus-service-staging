@@ -7,7 +7,7 @@ import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { Comment, ExternalTicket, User, Sector, Technician, TechnicalReport, ServiceContract } from '@/lib/types';
+import type { Comment, ExternalTicket, User, Sector, Technician, ServiceContract } from '@/lib/types';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import { doc, onSnapshot, updateDoc, arrayUnion, collection, getDocs, deleteField, query, where, limit, addDoc, getDoc } from 'firebase/firestore';
@@ -263,7 +263,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
   };
 
   const handleAssignTicketToCurrentUser = async () => {
-    if (!ticket || !user || !user.phone) return;
+    if (!ticket || !user) return;
 
     const ticketRef = doc(db, "external-tickets", ticket.id);
     const sector = allSectors.find(s => s.id === ticket.sectorId);
@@ -282,7 +282,9 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
         await sendWhatsappMessage(sectorGroupId, message);
       }
       
-      await sendWhatsappMessage(user.phone, message, user.id, `/external-tickets/${ticket.id}`);
+      if (user.phone) {
+        await sendWhatsappMessage(user.phone, message, user.id, `/external-tickets/${ticket.id}`);
+      }
 
       toast({
         title: 'Chamado Atribuído!',
