@@ -45,6 +45,7 @@ const formSchema = z.object({
   contact: z.string().optional(),
   isWhatsapp: z.boolean().default(false),
   description: z.string().min(5, { message: "A descrição é obrigatória." }),
+  isStandard: z.boolean().default(true),
   isContract: z.boolean().default(false),
   isUrgent: z.boolean().default(false),
   address: z.object({
@@ -60,6 +61,9 @@ const formSchema = z.object({
   scheduledToTime: z.string().optional(),
   hasCustomSla: z.boolean().default(false),
   customSlaHours: z.coerce.number().optional(),
+}).refine(data => data.isStandard || data.isContract || data.isUrgent, {
+    message: "Selecione pelo menos um tipo de atendimento.",
+    path: ["isStandard"], // You can point to any of the fields
 });
 
 export type NewExternalTicketFormValues = z.infer<typeof formSchema>;
@@ -145,6 +149,7 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
             contact: "",
             isWhatsapp: false,
             description: "",
+            isStandard: true,
             isContract: false,
             isUrgent: false,
             address: {
@@ -220,7 +225,7 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
         let fieldsToValidate: (keyof NewExternalTicketFormValues)[] = [];
     
         if (currentStep === 1) {
-            fieldsToValidate = ['clientName', 'description'];
+            fieldsToValidate = ['clientName', 'description', 'isStandard'];
         } else if (currentStep === 2) {
             if (addressMode === 'manual') {
                 fieldsToValidate.push('address.street', 'address.neighborhood', 'address.city', 'address.state');
@@ -247,13 +252,16 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
         setIsSaving(true);
         try {
             let type: 'padrão' | 'contrato' | 'urgente' | 'agendado' | 'retorno' = 'padrão';
-
-            if (values.scheduledToDate) {
-                type = 'agendado';
-            } else if (values.isUrgent) {
+            
+            // Priority: Urgent > Contract > Standard
+            if (values.isUrgent) {
                 type = 'urgente';
             } else if (values.isContract) {
                 type = 'contrato';
+            }
+
+            if (values.scheduledToDate) {
+                type = 'agendado';
             }
 
             const finalValues: any = { ...values, type };
@@ -421,6 +429,23 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                     <div className="space-y-3">
                         <FormLabel>Tipo de Atendimento</FormLabel>
                         <div className="flex flex-col sm:flex-row gap-4">
+                            <FormField
+                                control={form.control}
+                                name="isStandard"
+                                render={({ field }) => (
+                                <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-4">
+                                    <FormControl>
+                                    <Checkbox
+                                        checked={field.value}
+                                        onCheckedChange={field.onChange}
+                                    />
+                                    </FormControl>
+                                    <FormLabel className="font-normal">
+                                        Padrão
+                                    </FormLabel>
+                                </FormItem>
+                                )}
+                            />
                              <FormField
                                 control={form.control}
                                 name="isContract"
@@ -456,6 +481,7 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                                 )}
                             />
                         </div>
+                         <FormMessage>{form.formState.errors.isStandard?.message}</FormMessage>
                     </div>
                     
                     <FormField
@@ -850,3 +876,4 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
         </Form>
     );
 }
+
