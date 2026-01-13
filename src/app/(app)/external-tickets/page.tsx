@@ -179,7 +179,7 @@ export default function ExternalTicketsPage() {
   };
 
 
-  const handleAddTicket = async (values: NewExternalTicketFormValues & { type: 'padrão' | 'contrato' | 'urgente' | 'agendado' | 'retorno', slaExpiresAt?: string }) => {
+  const handleAddTicket = async (values: NewExternalTicketFormValues & { type: 'padrão' | 'contrato' | 'urgente' | 'agendado' | 'retorno', slaExpiresAt?: string, priority?: string }) => {
     if (!user) return;
   
     const newTicketData: Omit<ExternalTicket, 'id'> = {
@@ -196,6 +196,7 @@ export default function ExternalTicketsPage() {
       status: 'pendente', // Default status
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      ...(values.priority && { priority: values.priority as any }),
     };
   
     if (values.clientId) {
@@ -239,7 +240,13 @@ export default function ExternalTicketsPage() {
           messageStatusText = `Status: Em andamento por ${assignedTechnician.name}`;
       }
       
-      const message = `⚠️ Novo Chamado Criado ⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${newTicketData.client.name}\n*Contato:* ${newTicketData.client.phone || 'N/A'}\n*Endereço:* ${newTicketData.client.address || 'N/A'}\n*Solicitante:* ${newTicketData.requesterName || 'N/A'}\n\n*Descrição:* ${newTicketData.description}\n\n*Prioridade:* ${newTicketData.type}\n*${messageStatusText}\n*Atribuído por:* ${user.name}`;
+      let message = `⚠️ Novo Chamado Criado ⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${newTicketData.client.name}\n*Contato:* ${newTicketData.client.phone || 'N/A'}\n*Endereço:* ${newTicketData.client.address || 'N/A'}\n*Solicitante:* ${newTicketData.requesterName || 'N/A'}\n\n*Descrição:* ${newTicketData.description}\n\n*Tipo:* ${newTicketData.type}`;
+      
+      if (newTicketData.type === 'contrato' && newTicketData.priority) {
+        message += `\n*Prioridade do Contrato:* ${newTicketData.priority}`;
+      }
+
+      message += `\n*${messageStatusText}\n*Atribuído por:* ${user.name}`;
 
       if (newTicketData.technicianId) {
         const techUser = users.find(u => u.id === assignedTechnician?.userId);

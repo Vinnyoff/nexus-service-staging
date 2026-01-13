@@ -122,7 +122,13 @@ export default function ExternalTicketDetailsPage() {
             updatedAt: new Date().toISOString(),
         });
         
-        const message = `⚠️ Novo Chamado Criado ⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Prioridade:* ${ticket.type}\n*Status:* Em andamento por ${assignedTechnician?.name}\n*Atribuído por:* ${user.name}`;
+        let message = `⚠️ Novo Chamado Criado ⚠️\n\n*Setor:* ${sectorName}\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Tipo:* ${ticket.type}`;
+
+        if (ticket.type === 'contrato' && ticket.priority) {
+            message += `\n*Prioridade do Contrato:* ${ticket.priority}`;
+        }
+        
+        message += `\n*Status:* Em andamento por ${assignedTechnician?.name}\n*Atribuído por:* ${user.name}`;
 
         if (techUser?.phone) {
             await sendWhatsappMessage(techUser.phone, message, techUser.id, `/external-tickets/${ticket.id}`);
@@ -323,7 +329,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
         <ExternalTicketDetails 
             ticket={ticket} 
             onAddComment={handleAddComment}
-            onReopenTicket={handleReopenTicket}
+            onReopenTicket={onReopenTicket}
             onAssignToMe={handleAssignTicketToCurrentUser}
             onFinalizeTicket={handleFinalizeTicket}
             onReturnToPending={handleReturnToPending}
