@@ -87,14 +87,13 @@ export function ExternalTicketCard({
   const sector = sectors.find(s => s.id === ticket.sectorId);
   const isCurrentUserAssigned = currentUser?.id === ticket.technicianId;
   const hasComments = ticket.comments && ticket.comments.length > 0;
-
-  const isUserInSector = currentUser?.role === 'encarregado' && ticket.sectorId && currentUser.sectorIds?.includes(ticket.sectorId);
-
+  
   const canUserIntervene = currentUser && (
-    isCurrentUserAssigned ||
+    currentUser.id === ticket.creatorId || // The user who created the ticket
+    isCurrentUserAssigned || // The user assigned to it
     currentUser.role === 'admin' ||
     currentUser.role === 'gerente' ||
-    isUserInSector
+    (currentUser.role === 'encarregado' && ticket.sectorId && currentUser.sectorIds?.includes(ticket.sectorId))
   );
 
 
