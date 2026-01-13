@@ -47,6 +47,7 @@ const formSchema = z.object({
   description: z.string().min(5, { message: "A descrição é obrigatória." }),
   isStandard: z.boolean().default(true),
   isContract: z.boolean().default(false),
+  contractPriority: z.string().optional(),
   isUrgent: z.boolean().default(false),
   address: z.object({
     street: z.string().optional(),
@@ -69,20 +70,13 @@ const formSchema = z.object({
             path: ["isStandard"],
         });
     }
-    if (data.isStandard && data.isContract) {
-        ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: "Os tipos 'Padrão' e 'Contrato' não podem ser selecionados juntos.",
-            path: ["isContract"],
-        });
-    }
 });
 
 export type NewExternalTicketFormValues = z.infer<typeof formSchema>;
 
 interface NewExternalTicketFormProps {
   onFinished: () => void;
-  onSave: (values: NewExternalTicketFormValues & { type: 'padrão' | 'contrato' | 'urgente' | 'agendado' | 'retorno', slaExpiresAt?: string }) => Promise<void>;
+  onSave: (values: NewExternalTicketFormValues & { type: 'padrão' | 'contrato' | 'urgente' | 'agendado' | 'retorno', slaExpiresAt?: string, priority?: string }) => Promise<void>;
 }
 
 const steps = [
@@ -164,6 +158,7 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
             isStandard: true,
             isContract: false,
             isUrgent: false,
+            contractPriority: "Normal",
             address: {
                 street: "",
                 number: "",
@@ -178,6 +173,7 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
         },
     });
 
+    const isContract = form.watch("isContract");
     const selectedSectorId = form.watch("sectorId");
     
     const filteredTechnicians = useMemo(() => {
@@ -276,7 +272,8 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                 type = 'agendado';
             }
 
-            const finalValues: any = { ...values, type };
+            const finalValues: any = { ...values, type, priority: values.isContract ? values.contractPriority : undefined };
+
             if (addressMode === 'none') {
                 finalValues.address = undefined;
             } else if (addressMode === 'api') {
@@ -440,7 +437,7 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
 
                     <div className="space-y-3">
                         <FormLabel>Tipo de Atendimento</FormLabel>
-                        <div className="flex flex-col sm:flex-row gap-4">
+                        <div className="flex flex-wrap gap-4 items-center">
                             <FormField
                                 control={form.control}
                                 name="isStandard"
@@ -502,6 +499,29 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                                 </FormItem>
                                 )}
                             />
+                            {isContract && (
+                               <FormField
+                                    control={form.control}
+                                    name="contractPriority"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                <FormControl>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Prioridade do Contrato" />
+                                                    </SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent>
+                                                    <SelectItem value="Básica">Básica</SelectItem>
+                                                    <SelectItem value="Normal">Normal</SelectItem>
+                                                    <SelectItem value="Alta">Alta</SelectItem>
+                                                    <SelectItem value="Extrema">Extrema</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </FormItem>
+                                    )}
+                                />
+                            )}
                         </div>
                          <FormMessage>{form.formState.errors.isStandard?.message || form.formState.errors.isContract?.message || form.formState.errors.isUrgent?.message}</FormMessage>
                     </div>

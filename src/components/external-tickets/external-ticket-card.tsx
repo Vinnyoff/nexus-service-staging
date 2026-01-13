@@ -13,7 +13,7 @@ import { format, parseISO, differenceInHours, formatDistanceToNowStrict, isAfter
 import { ptBR } from "date-fns/locale";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuItem, DropdownMenuSeparator } from "../ui/dropdown-menu";
 import { Button } from "../ui/button";
-import { MoreHorizontal, Calendar, UserSquare, MapPin, Hand, History, XCircle, Truck, Copy, Clock, AlertTriangle, Building2, MessageSquare } from "lucide-react";
+import { MoreHorizontal, Calendar, UserSquare, MapPin, Hand, History, XCircle, Truck, Copy, Clock, AlertTriangle, Building2, MessageSquare, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 import { useEffect, useState } from "react";
@@ -176,6 +176,18 @@ export function ExternalTicketCard({
           <div className="flex-1 space-y-1.5">
             <div className="flex items-center gap-2">
                 <CardTitle className="text-lg">{truncatedClientName}</CardTitle>
+                {ticket.type === 'contrato' && ticket.priority && (
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger>
+                                <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>Prioridade do Contrato: {ticket.priority}</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                )}
                 {hasComments && (
                     <TooltipProvider>
                         <Tooltip>

@@ -163,6 +163,7 @@ export interface ExternalTicket {
   technicianId?: string | null;
   description: string;
   type: 'padrão' | 'contrato' | 'urgente' | 'agendado' | 'retorno';
+  priority?: 'Básica' | 'Normal' | 'Alta' | 'Extrema';
   status: 'pendente' | 'em andamento' | 'concluído' | 'cancelado';
   scheduledTo?: string;
   createdAt: string;
