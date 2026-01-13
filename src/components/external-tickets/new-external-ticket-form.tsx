@@ -21,7 +21,7 @@ import { CalendarIcon, ArrowLeft, ArrowRight, Loader2, List, Check, Search, Chev
 import { format, addHours } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { ptBR } from "date-fns/locale";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Checkbox } from "../ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -63,10 +63,10 @@ const formSchema = z.object({
   hasCustomSla: z.boolean().default(false),
   customSlaHours: z.coerce.number().optional(),
 }).superRefine((data, ctx) => {
-    if (!data.isStandard && !data.isContract && !data.isUrgent) {
+    if (!data.isStandard && !data.isContract) {
         ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            message: "Selecione pelo menos um tipo de atendimento.",
+            message: "Selecione 'Padrão' ou 'Contrato'.",
             path: ["isStandard"],
         });
     }
@@ -233,7 +233,7 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
         let fieldsToValidate: (keyof NewExternalTicketFormValues)[] = [];
     
         if (currentStep === 1) {
-            fieldsToValidate = ['clientName', 'description', 'isStandard', 'isContract', 'isUrgent'];
+            fieldsToValidate = ['clientName', 'description', 'isStandard', 'isContract'];
         } else if (currentStep === 2) {
             if (addressMode === 'manual') {
                 fieldsToValidate.push('address.street', 'address.neighborhood', 'address.city', 'address.state');
@@ -499,31 +499,44 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                                 </FormItem>
                                 )}
                             />
-                            {isContract && (
-                               <FormField
-                                    control={form.control}
-                                    name="contractPriority"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                                <FormControl>
-                                                    <SelectTrigger>
-                                                        <SelectValue placeholder="Prioridade do Contrato" />
-                                                    </SelectTrigger>
-                                                </FormControl>
-                                                <SelectContent>
-                                                    <SelectItem value="Básica">Básica</SelectItem>
-                                                    <SelectItem value="Normal">Normal</SelectItem>
-                                                    <SelectItem value="Alta">Alta</SelectItem>
-                                                    <SelectItem value="Extrema">Extrema</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </FormItem>
-                                    )}
-                                />
-                            )}
                         </div>
-                         <FormMessage>{form.formState.errors.isStandard?.message || form.formState.errors.isContract?.message || form.formState.errors.isUrgent?.message}</FormMessage>
+                        {isContract && (
+                            <FormField
+                                control={form.control}
+                                name="contractPriority"
+                                render={({ field }) => (
+                                <FormItem className="space-y-3 pt-2">
+                                    <FormLabel>Prioridade do Contrato</FormLabel>
+                                    <FormControl>
+                                    <RadioGroup
+                                        onValueChange={field.onChange}
+                                        defaultValue={field.value}
+                                        className="flex flex-wrap gap-x-4 gap-y-2"
+                                    >
+                                        <FormItem className="flex items-center space-x-2 space-y-0">
+                                        <FormControl><RadioGroupItem value="Básica" /></FormControl>
+                                        <FormLabel className="font-normal">Básica</FormLabel>
+                                        </FormItem>
+                                        <FormItem className="flex items-center space-x-2 space-y-0">
+                                        <FormControl><RadioGroupItem value="Normal" /></FormControl>
+                                        <FormLabel className="font-normal">Normal</FormLabel>
+                                        </FormItem>
+                                        <FormItem className="flex items-center space-x-2 space-y-0">
+                                        <FormControl><RadioGroupItem value="Alta" /></FormControl>
+                                        <FormLabel className="font-normal">Alta</FormLabel>
+                                        </FormItem>
+                                        <FormItem className="flex items-center space-x-2 space-y-0">
+                                        <FormControl><RadioGroupItem value="Extrema" /></FormControl>
+                                        <FormLabel className="font-normal">Extrema</FormLabel>
+                                        </FormItem>
+                                    </RadioGroup>
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                                )}
+                            />
+                        )}
+                         <FormMessage>{form.formState.errors.isStandard?.message}</FormMessage>
                     </div>
                     
                     <FormField
