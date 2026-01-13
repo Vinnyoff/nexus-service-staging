@@ -511,7 +511,7 @@ export function ExternalTicketDetails({
                     
                      <AlertDialog>
                         <AlertDialogTrigger asChild>
-                           <Button className="w-full" variant="destructive">
+                           <Button className="w-full" variant="destructive" disabled={!canUserIntervene}>
                                <Undo className="mr-2 h-4 w-4" /> Devolver para Pendente
                            </Button>
                         </AlertDialogTrigger>

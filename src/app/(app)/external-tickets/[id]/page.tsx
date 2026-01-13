@@ -177,7 +177,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
             finalSignatureUrl = await optimizeSignature(signatureDataUrl);
         }
 
-        const newTechnicalReport: TechnicalReport = {
+        const newTechnicalReport = {
             observations: observations,
             photos: photoURLs,
             ...(finalSignatureUrl && { signature: finalSignatureUrl }),
@@ -242,7 +242,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
   };
 
   const handleReturnToPending = async (id: string, reason: string) => {
-    if (!user) return;
+    if (!user || !ticket) return;
     const ticketRef = doc(db, "external-tickets", id);
     try {
       await handleAddComment(`**Chamado Devolvido para Pendente:** ${reason}`);
@@ -251,6 +251,17 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
         technicianId: deleteField(),
         updatedAt: new Date().toISOString(),
       });
+
+      const sector = allSectors.find(s => s.id === ticket.sectorId);
+      if (sector?.whatsappGroupId) {
+        let message = `↩️ Chamado Devolvido para Pendente ↩️\n\n`
+            + `*Cliente:* ${ticket.client.name}\n`
+            + `*Devolvido por:* ${user.name}\n`
+            + `*Motivo:* ${reason}\n\n`
+            + `O chamado está novamente disponível para ser pego pela equipe.`;
+        await sendWhatsappMessage(sector.whatsappGroupId, message);
+      }
+      
       toast({
         title: 'Chamado Devolvido!',
         description: `O chamado #${id.substring(0,4)} retornou para a fila de pendentes.`,
