@@ -122,19 +122,19 @@ export default function ExternalTicketDetailsPage() {
         });
         
         let message = `⚠️ Novo Chamado Criado ⚠️\n\n`
-          + `Cliente: ${ticket.client.name}\n`
-          + `Contato: ${ticket.client.phone || 'N/A'}\n`
-          + `Solicitante: ${ticket.requesterName || 'N/A'}\n`
-          + `Endereço: ${ticket.client.address || 'N/A'}\n\n`
-          + `Descrição: ${ticket.description}\n\n`
-          + `Tipo: ${ticket.type}`;
+          + `*Cliente:* ${ticket.client.name}\n`
+          + `*Contato:* ${ticket.client.phone || 'N/A'}\n`
+          + `*Solicitante:* ${ticket.requesterName || 'N/A'}\n`
+          + `*Endereço:* ${ticket.client.address || 'N/A'}\n\n`
+          + `*Descrição:* ${ticket.description}\n\n`
+          + `*Tipo:* ${ticket.type}`;
 
         if (ticket.type === 'contrato' && ticket.priority) {
-            message += `\nPrioridade do Contrato: 🚨${ticket.priority}`;
+            message += `\n*Prioridade do Contrato:* 🚨${ticket.priority}`;
         }
         
-        message += `\nAtribuído por: ${user.name}\n\n`
-                 + `Status: Em andamento por ${assignedTechnician?.name}`;
+        message += `\n*Atribuído por:* ${user.name}\n\n`
+                 + `*Status:* Em andamento por ${assignedTechnician?.name}`;
 
         if (techUser?.phone) {
             await sendWhatsappMessage(techUser.phone, message, techUser.id, `/external-tickets/${ticket.id}`);

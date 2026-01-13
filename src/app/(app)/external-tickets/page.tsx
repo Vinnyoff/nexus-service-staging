@@ -232,26 +232,26 @@ export default function ExternalTicketsPage() {
       const sector = sectors.find(s => s.id === newTicketData.sectorId);
       const sectorGroupId = sector?.whatsappGroupId;
       
-      let messageStatusText = `Status: ${newTicketData.status === 'pendente' ? 'Pendente' : `Em andamento por ${user.name}`}`;
+      let messageStatusText = `*Status:* ${newTicketData.status === 'pendente' ? 'Pendente' : `Em andamento por ${user.name}`}`;
       const assignedTechnician = technicians.find(t => t.id === newTicketData.technicianId);
 
       if (newTicketData.technicianId && assignedTechnician) {
-          messageStatusText = `Status: Em andamento por ${assignedTechnician.name}`;
+          messageStatusText = `*Status:* Em andamento por ${assignedTechnician.name}`;
       }
       
       let message = `⚠️ Novo Chamado Criado ⚠️\n\n`
-          + `Cliente: ${newTicketData.client.name}\n`
-          + `Contato: ${newTicketData.client.phone || 'N/A'}\n`
-          + `Solicitante: ${newTicketData.requesterName || 'N/A'}\n`
-          + `Endereço: ${newTicketData.client.address || 'N/A'}\n\n`
-          + `Descrição: ${newTicketData.description}\n\n`
-          + `Tipo: ${newTicketData.type}`;
+          + `*Cliente:* ${newTicketData.client.name}\n`
+          + `*Contato:* ${newTicketData.client.phone || 'N/A'}\n`
+          + `*Solicitante:* ${newTicketData.requesterName || 'N/A'}\n`
+          + `*Endereço:* ${newTicketData.client.address || 'N/A'}\n\n`
+          + `*Descrição:* ${newTicketData.description}\n\n`
+          + `*Tipo:* ${newTicketData.type}`;
 
       if (newTicketData.type === 'contrato' && newTicketData.priority) {
-        message += `\nPrioridade do Contrato: 🚨${newTicketData.priority}`;
+        message += `\n*Prioridade do Contrato:* 🚨${newTicketData.priority}`;
       }
 
-      message += `\nAtribuído por: ${user.name}\n\n`
+      message += `\n*Atribuído por:* ${user.name}\n\n`
                + `${messageStatusText}`;
 
       if (newTicketData.technicianId) {
