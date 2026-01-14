@@ -1,3 +1,4 @@
+
 export type Role = 'admin' | 'gerente' | 'encarregado' | 'tecnico' | 'vendedor';
 export type UserStatus = 'active' | 'inactive' | 'pending_invitation';
 
@@ -108,6 +109,7 @@ export interface ServiceContract {
   clientName: string;
   description?: string;
   sectorIds: string[];
+  defaultChecklistId?: string;
   frequencyDays: number;
   status: 'active' | 'inactive';
   createdAt: string;

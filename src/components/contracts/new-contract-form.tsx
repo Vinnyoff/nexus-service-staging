@@ -14,20 +14,23 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Client, Sector } from "@/lib/types";
-import { useState } from "react";
+import { Client, Sector, Checklist } from "@/lib/types";
+import { useState, useMemo } from "react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Textarea } from "../ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+
 
 const formSchema = z.object({
   clientId: z.string({ required_error: "Selecione um cliente." }),
   description: z.string().optional(),
   frequencyDays: z.coerce.number().positive({ message: "A frequência deve ser maior que zero." }),
   sectorIds: z.array(z.string()).min(1, { message: "Selecione pelo menos um setor." }),
+  defaultChecklistId: z.string().optional(),
 });
 
 export type NewContractFormValues = z.infer<typeof formSchema>;
@@ -35,11 +38,12 @@ export type NewContractFormValues = z.infer<typeof formSchema>;
 interface NewContractFormProps {
   clients: Client[];
   sectors: Sector[];
+  checklists: Checklist[];
   onSave: (values: NewContractFormValues) => void;
   onFinished: () => void;
 }
 
-export function NewContractForm({ clients, sectors, onSave, onFinished }: NewContractFormProps) {
+export function NewContractForm({ clients, sectors, checklists, onSave, onFinished }: NewContractFormProps) {
   const { user } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
   const [openClientSelector, setOpenClientSelector] = useState(false);
@@ -51,8 +55,17 @@ export function NewContractForm({ clients, sectors, onSave, onFinished }: NewCon
         description: "",
         frequencyDays: 30,
         sectorIds: [],
+        defaultChecklistId: undefined,
     },
   });
+  
+  const selectedSectors = form.watch("sectorIds");
+
+  const availableChecklists = useMemo(() => {
+    if (!selectedSectors || selectedSectors.length === 0) return [];
+    return checklists.filter(c => selectedSectors.includes(c.sectorId) && c.status === 'active');
+  }, [checklists, selectedSectors]);
+
 
   async function onSubmit(values: NewContractFormValues) {
     setIsSaving(true);
@@ -216,6 +229,31 @@ export function NewContractForm({ clients, sectors, onSave, onFinished }: NewCon
                     </Popover>
                     <FormMessage />
                 </FormItem>
+                )}
+            />
+            
+            <FormField
+                control={form.control}
+                name="defaultChecklistId"
+                render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Checklist Padrão (Opcional)</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value} disabled={availableChecklists.length === 0}>
+                            <FormControl>
+                                <SelectTrigger>
+                                <SelectValue placeholder={availableChecklists.length === 0 ? "Selecione um setor primeiro" : "Nenhum checklist padrão"} />
+                                </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                                {availableChecklists.map((checklist) => (
+                                <SelectItem key={checklist.id} value={checklist.id}>
+                                    {checklist.name}
+                                </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <FormMessage />
+                    </FormItem>
                 )}
             />
         </div>

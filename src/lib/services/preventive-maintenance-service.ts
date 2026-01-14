@@ -4,7 +4,7 @@
 
 import { collection, getDocs, addDoc, query, where, orderBy, limit, doc, getDoc } from 'firebase/firestore';
 import { db } from '@/firebase/config';
-import { Client, ExternalTicket, ServiceContract } from '@/lib/types';
+import { Client, ExternalTicket, ServiceContract, Checklist, ChecklistTaskState } from '@/lib/types';
 import { differenceInDays, parseISO } from 'date-fns';
 
 /**
@@ -60,6 +60,15 @@ export async function generatePreventiveTickets() {
     const clientDoc = await getDoc(doc(db, "clients", contract.clientId));
     if (!clientDoc.exists()) continue;
     const clientData = { id: clientDoc.id, ...clientDoc.data()} as Client;
+    
+    let defaultChecklist: Checklist | null = null;
+    if (contract.defaultChecklistId) {
+        const checklistDoc = await getDoc(doc(db, "checklists", contract.defaultChecklistId));
+        if (checklistDoc.exists()) {
+            defaultChecklist = { id: checklistDoc.id, ...checklistDoc.data() } as Checklist;
+        }
+    }
+
 
     for (const sectorId of contract.sectorIds) {
       const lastTicket = await findLastPreventiveTicket(clientData.id, sectorId);
@@ -71,6 +80,16 @@ export async function generatePreventiveTickets() {
 
       if (daysSinceLastEvent >= contract.frequencyDays) {
         console.log(`Gerando chamado preventivo para ${clientData.name} no setor ${sectorId}.`);
+        
+        let checklistState: ChecklistTaskState[] | undefined = undefined;
+        if (defaultChecklist && contract.sectorIds.includes(defaultChecklist.sectorId)) {
+            checklistState = defaultChecklist.tasks.map(task => ({
+              taskId: task.id,
+              completed: false,
+              observation: '',
+              photo: ''
+            }));
+        }
 
         const newTicketData: Omit<ExternalTicket, 'id'> = {
           client: {
@@ -98,6 +117,7 @@ export async function generatePreventiveTickets() {
           enRoute: null,
           enRouteAt: null,
           slaExpiresAt: null,
+          ...(defaultChecklist && { checklistId: defaultChecklist.id, checklist: checklistState })
         };
 
         try {

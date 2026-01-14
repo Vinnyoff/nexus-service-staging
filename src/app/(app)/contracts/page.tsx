@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { ServiceContract, Client, Sector, ExternalTicket } from "@/lib/types";
+import { ServiceContract, Client, Sector, ExternalTicket, Checklist, ChecklistTaskState } from "@/lib/types";
 import { collection, addDoc, onSnapshot, doc, updateDoc, writeBatch, getDoc } from "firebase/firestore";
 import { db } from "@/firebase/config";
 import { useToast } from "@/hooks/use-toast";
@@ -28,6 +28,7 @@ export default function ContractsPage() {
   const [contracts, setContracts] = useState<ServiceContract[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
+  const [checklists, setChecklists] = useState<Checklist[]>([]);
   const [loading, setLoading] = useState(true);
   const [isChecking, setIsChecking] = useState(false);
   const { toast } = useToast();
@@ -45,6 +46,10 @@ export default function ContractsPage() {
     const unsubSectors = onSnapshot(collection(db, "sectors"), (snapshot) => {
         setSectors(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sector)));
     });
+    const unsubChecklists = onSnapshot(collection(db, "checklists"), (snapshot) => {
+        setChecklists(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Checklist)));
+    });
+
 
     // Simple timeout to avoid UI shift on fast connections
     const timer = setTimeout(() => setLoading(false), 500);
@@ -53,6 +58,7 @@ export default function ContractsPage() {
         unsubContracts();
         unsubClients();
         unsubSectors();
+        unsubChecklists();
         clearTimeout(timer);
     };
   }, []);
@@ -67,6 +73,8 @@ export default function ContractsPage() {
         toast({ variant: 'destructive', title: "Cliente ou endereço não encontrado"});
         return;
     }
+    const defaultChecklist = checklists.find(c => c.id === values.defaultChecklistId);
+    
     try {
       const batch = writeBatch(db);
       const now = new Date();
@@ -80,6 +88,7 @@ export default function ContractsPage() {
         status: 'active',
         createdAt: now.toISOString(),
         updatedAt: now.toISOString(),
+        ...(values.defaultChecklistId && { defaultChecklistId: values.defaultChecklistId }),
       };
       
       const contractRef = doc(collection(db, "serviceContracts"));
@@ -88,6 +97,17 @@ export default function ContractsPage() {
       // Create an immediate "start" ticket for each sector in the contract
       for (const sectorId of values.sectorIds) {
           const ticketRef = doc(collection(db, "external-tickets"));
+          
+          let checklistState: ChecklistTaskState[] | undefined = undefined;
+          if (defaultChecklist && defaultChecklist.sectorId === sectorId) {
+            checklistState = defaultChecklist.tasks.map(task => ({
+              taskId: task.id,
+              completed: false,
+              observation: '',
+              photo: ''
+            }));
+          }
+
           const newTicketData: Omit<ExternalTicket, 'id'> = {
               client: {
                 id: client.id,
@@ -104,6 +124,7 @@ export default function ContractsPage() {
               status: 'pendente',
               createdAt: now.toISOString(),
               updatedAt: now.toISOString(),
+              ...(defaultChecklist && { checklistId: defaultChecklist.id, checklist: checklistState })
           };
           batch.set(ticketRef, newTicketData);
       }
@@ -192,6 +213,7 @@ export default function ContractsPage() {
                 <NewContractForm 
                     clients={clients.filter(c => c.status === 'active')} 
                     sectors={sectors.filter(s => s.status === 'active')}
+                    checklists={checklists}
                     onSave={handleAddContract} 
                     onFinished={() => setIsNewDialogOpen(false)} 
                 />
@@ -207,6 +229,7 @@ export default function ContractsPage() {
         <ContractsTable 
           data={contracts}
           sectors={sectors}
+          checklists={checklists}
           onUpdateContract={handleUpdateContract}
         />
       )}

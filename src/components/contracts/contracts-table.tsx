@@ -33,7 +33,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import type { ServiceContract, Sector } from "@/lib/types"
+import type { ServiceContract, Sector, Checklist } from "@/lib/types"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
@@ -74,10 +74,11 @@ const ActionsCell = ({ row }: { row: any }) => {
 interface ContractsTableProps {
     data: ServiceContract[];
     sectors: Sector[];
+    checklists: Checklist[];
     onUpdateContract: (contractId: string, values: EditContractFormValues, newStatus: 'active' | 'inactive') => Promise<boolean>;
 }
 
-export function ContractsTable({ data, sectors, onUpdateContract }: ContractsTableProps) {
+export function ContractsTable({ data, sectors, checklists, onUpdateContract }: ContractsTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([
     { id: 'clientName', desc: false }
   ])
@@ -346,6 +347,7 @@ export function ContractsTable({ data, sectors, onUpdateContract }: ContractsTab
                 <EditContractForm 
                     contract={selectedContract} 
                     sectors={sectors}
+                    checklists={checklists}
                     onSave={handleSaveEdit} 
                     onFinished={() => setIsEditOpen(false)} 
                 />

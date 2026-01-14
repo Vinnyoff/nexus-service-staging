@@ -14,8 +14,8 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Sector, ServiceContract } from "@/lib/types";
-import { useState } from "react";
+import { Sector, ServiceContract, Checklist } from "@/lib/types";
+import { useState, useMemo } from "react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -23,11 +23,14 @@ import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import { Textarea } from "../ui/textarea";
 import { Separator } from "../ui/separator";
 import { Checkbox } from "../ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+
 
 const formSchema = z.object({
   description: z.string().optional(),
   frequencyDays: z.coerce.number().positive({ message: "A frequência deve ser maior que zero." }),
   sectorIds: z.array(z.string()).min(1, { message: "Selecione pelo menos um setor." }),
+  defaultChecklistId: z.string().optional(),
   status: z.enum(['active', 'inactive']),
 });
 
@@ -36,11 +39,12 @@ export type EditContractFormValues = Omit<z.infer<typeof formSchema>, 'status'>;
 interface EditContractFormProps {
   contract: ServiceContract;
   sectors: Sector[];
+  checklists: Checklist[];
   onSave: (contractId: string, values: EditContractFormValues, newStatus: 'active' | 'inactive') => Promise<boolean>;
   onFinished: () => void;
 }
 
-export function EditContractForm({ contract, sectors, onSave, onFinished }: EditContractFormProps) {
+export function EditContractForm({ contract, sectors, checklists, onSave, onFinished }: EditContractFormProps) {
   const [isSaving, setIsSaving] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -49,9 +53,18 @@ export function EditContractForm({ contract, sectors, onSave, onFinished }: Edit
         description: contract.description || "",
         frequencyDays: contract.frequencyDays,
         sectorIds: contract.sectorIds,
+        defaultChecklistId: contract.defaultChecklistId || "",
         status: contract.status,
     },
   });
+  
+  const selectedSectors = form.watch("sectorIds");
+
+  const availableChecklists = useMemo(() => {
+    if (!selectedSectors || selectedSectors.length === 0) return [];
+    return checklists.filter(c => selectedSectors.includes(c.sectorId) && c.status === 'active');
+  }, [checklists, selectedSectors]);
+
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSaving(true);
@@ -153,6 +166,33 @@ export function EditContractForm({ contract, sectors, onSave, onFinished }: Edit
                 </FormItem>
                 )}
             />
+            
+            <FormField
+                control={form.control}
+                name="defaultChecklistId"
+                render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Checklist Padrão (Opcional)</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value} disabled={availableChecklists.length === 0}>
+                            <FormControl>
+                                <SelectTrigger>
+                                <SelectValue placeholder={availableChecklists.length === 0 ? "Selecione um setor primeiro" : "Nenhum checklist padrão"} />
+                                </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                                 <SelectItem value="">Nenhum</SelectItem>
+                                {availableChecklists.map((checklist) => (
+                                <SelectItem key={checklist.id} value={checklist.id}>
+                                    {checklist.name}
+                                </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <FormMessage />
+                    </FormItem>
+                )}
+            />
+            
             <Separator className="my-4" />
             
              <FormField
