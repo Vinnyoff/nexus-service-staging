@@ -73,7 +73,8 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({ task, taskModel, disabled
                     value={observation}
                     onChange={(e) => setObservation(e.target.value)}
                     disabled={disabled}
-                    className="text-xs h-16"
+                    rows={1}
+                    className="text-xs min-h-[40px] resize-y"
                 />
                 <div className="flex items-center gap-2">
                     <Input
@@ -161,7 +162,7 @@ export function ExternalTicketDetails({
   const isCurrentUserAssigned = currentUser?.id === ticket.technicianId;
   const hasCheckedIn = !!ticket.checkIn;
   const checklistModel = ticket.checklistId ? allChecklists.find(c => c.id === ticket.checklistId) : null;
-  const isChecklistDisabled = !hasCheckedIn || !isCurrentUserAssigned;
+  const isChecklistDisabled = !hasCheckedIn || !isCurrentUserAssigned || isConcluded;
 
   const canUserIntervene = currentUser && (
     isCurrentUserAssigned ||
@@ -364,7 +365,7 @@ export function ExternalTicketDetails({
                     <CardTitle className='flex items-center'><ListChecks className='mr-2 h-5 w-5'/> Checklist: {checklistModel.name}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                    {isChecklistDisabled && (
+                    {isChecklistDisabled && !isConcluded && (
                         <Alert variant="destructive">
                             <Info className="h-4 w-4" />
                             <AlertTitle>Check-in Necessário</AlertTitle>
