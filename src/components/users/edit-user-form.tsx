@@ -174,7 +174,6 @@ interface EditUserFormProps {
 
 export function EditUserForm({ user, onSave, onSavePermissions, onFinished, sectors }: EditUserFormProps) {
   const [isSaving, setIsSaving] = useState(false);
-  const defaultPermissions = user.role === 'gerente' ? defaultGerentePermissions : defaultEncarregadoPermissions;
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -186,17 +185,14 @@ export function EditUserForm({ user, onSave, onSavePermissions, onFinished, sect
       euroInfoId: user.euroInfoId || "",
       rondoInfoId: user.rondoInfoId || "",
       status: user.status as 'active' | 'inactive',
-      permissions: { ...defaultPermissions, ...user.permissions }
+      permissions: { 
+          ...(user.role === 'gerente' ? defaultGerentePermissions : defaultEncarregadoPermissions), 
+          ...user.permissions 
+      }
     },
   });
 
   const role = form.watch("role");
-
-  useEffect(() => {
-    // Reset permissions when role changes
-    const newDefaultPermissions = role === 'gerente' ? defaultGerentePermissions : defaultEncarregadoPermissions;
-    form.setValue('permissions', newDefaultPermissions);
-  }, [role, form]);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSaving(true);
@@ -206,6 +202,11 @@ export function EditUserForm({ user, onSave, onSavePermissions, onFinished, sect
         await onSavePermissions(user.id, permissions);
     }
     setIsSaving(false);
+  }
+
+  const handleResetPermissions = () => {
+    const newDefaultPermissions = role === 'gerente' ? defaultGerentePermissions : defaultEncarregadoPermissions;
+    form.setValue('permissions', newDefaultPermissions, { shouldDirty: true });
   }
 
   return (
@@ -353,7 +354,12 @@ export function EditUserForm({ user, onSave, onSavePermissions, onFinished, sect
                 )}
             />
           )}
-
+           
+           <div className="flex justify-end">
+                <Button type="button" variant="link" onClick={handleResetPermissions}>
+                    Resetar Permissões para Padrão
+                </Button>
+            </div>
            <UserPermissionsSubForm form={form} userRole={role} />
 
            <Separator className="my-4" />
