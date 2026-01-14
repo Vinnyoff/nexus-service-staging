@@ -69,18 +69,8 @@ export function NavLinks() {
   if (!user) return null;
 
   const hasPermission = (item: NavItem) => {
-    // Admins and managers have access to everything by default, ignoring the permissions object
-    if (!item.roles.includes(user.role)) {
-        return false;
-    }
-    
-    if (user.role === 'admin' || user.role === 'gerente') {
-      return true;
-    }
-    
-    // For other roles, check the specific permission
-    const permissionLevel = user.permissions?.[item.permissionKey];
-    return permissionLevel === 'read' || permissionLevel === 'write';
+    // Simplified logic: only check if the user's role is included in the item's roles array.
+    return item.roles.includes(user.role);
   }
 
   let userPrimaryNavItems = primaryNavItems.filter(hasPermission);
