@@ -115,7 +115,6 @@ interface ExternalTicketDetailsProps {
   onUploadChecklistPhoto: (file: File, taskId: string) => Promise<boolean>;
   currentUser: User | null;
   users: User[];
-  allTechnicians: Technician[];
   allSectors: Sector[];
   allChecklists: Checklist[];
 }
@@ -134,7 +133,6 @@ export function ExternalTicketDetails({
     onUploadChecklistPhoto,
     currentUser, 
     users,
-    allTechnicians,
     allSectors,
     allChecklists,
 }: ExternalTicketDetailsProps) {
@@ -173,9 +171,9 @@ export function ExternalTicketDetails({
   
   const canSupervisorManage = currentUser && (currentUser.role === 'admin' || currentUser.role === 'gerente' || currentUser.role === 'encarregado');
   
-  const techniciansInSector = useMemo(() => {
-    return allTechnicians.filter(tech => tech.sectorIds && tech.sectorIds.includes(ticket.sectorId));
-  }, [allTechnicians, ticket.sectorId]);
+  const assignableUsers = useMemo(() => {
+    return users.filter(u => (u.role === 'tecnico' || u.role === 'encarregado') && u.sectorIds?.includes(ticket.sectorId));
+  }, [users, ticket.sectorId]);
 
   const getCommentAuthor = (authorId: string) => users.find((u) => u.id === authorId);
   const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
@@ -526,7 +524,7 @@ export function ExternalTicketDetails({
                 )
             ) : canTakeAction ? (
               <>
-                {isPending && !isAssigned && currentUser?.role === 'tecnico' && (
+                {isPending && !isAssigned && (currentUser?.role === 'tecnico' || currentUser?.role === 'encarregado') && (
                   <Button className="w-full" onClick={onAssignToMe}>
                       <Hand className="mr-2 h-4 w-4" /> Pegar Chamado
                   </Button>
@@ -683,8 +681,8 @@ export function ExternalTicketDetails({
                                 <SelectValue placeholder="Selecione um técnico..." />
                             </SelectTrigger>
                             <SelectContent>
-                                {techniciansInSector.map(tech => (
-                                    <SelectItem key={tech.id} value={tech.id}>{tech.name}</SelectItem>
+                                {assignableUsers.map(user => (
+                                    <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>

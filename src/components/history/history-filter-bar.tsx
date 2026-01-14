@@ -33,18 +33,18 @@ export function HistoryFilterBar({
   const canFilterByTechnician = user?.role === 'admin' || user?.role === 'gerente' || user?.role === 'encarregado';
 
   const visibleTechnicians = useMemo(() => {
+    const fieldStaff = allUsers.filter(u => u.role === 'tecnico' || u.role === 'encarregado');
     if (!user) return [];
     if (user.role === 'admin' || user.role === 'gerente') {
-        return allTechnicians;
+        return fieldStaff;
     }
     if (user.role === 'encarregado' && user.sectorIds) {
-        // Encarregado sees technicians that belong to any of his sectors.
-        return allTechnicians.filter(tech => 
+        return fieldStaff.filter(tech => 
             tech.sectorIds && tech.sectorIds.some(techSectorId => user.sectorIds!.includes(techSectorId))
         );
     }
     return [];
-  }, [user, allTechnicians]);
+  }, [user, allUsers]);
 
 
   const handleFilter = () => {

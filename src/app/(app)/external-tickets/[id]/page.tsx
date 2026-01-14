@@ -28,7 +28,6 @@ export default function ExternalTicketDetailsPage() {
   const [ticket, setTicket] = useState<ExternalTicket | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [allSectors, setAllSectors] = useState<Sector[]>([]);
-  const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [checklists, setChecklists] = useState<Checklist[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -49,16 +48,14 @@ export default function ExternalTicketDetailsPage() {
 
     const fetchRelatedData = async () => {
         try {
-            const [usersSnapshot, sectorsSnapshot, techsSnapshot, checklistsSnapshot] = await Promise.all([
+            const [usersSnapshot, sectorsSnapshot, checklistsSnapshot] = await Promise.all([
                 getDocs(collection(db, "users")),
                 getDocs(collection(db, "sectors")),
-                getDocs(collection(db, "technicians")),
                 getDocs(collection(db, "checklists")),
             ]);
             
             setUsers(usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
             setAllSectors(sectorsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sector)));
-            setTechnicians(techsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Technician)));
             setChecklists(checklistsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Checklist)));
         } catch (error) {
             console.error("Error fetching related data: ", error);
@@ -113,8 +110,7 @@ export default function ExternalTicketDetailsPage() {
     if (!ticket || !user) return;
     const ticketRef = doc(db, "external-tickets", ticket.id);
     try {
-        const assignedTechnician = technicians.find(t => t.id === technicianId);
-        const techUser = users.find(u => u.id === assignedTechnician?.userId);
+        const assignedUser = users.find(u => u.id === technicianId);
         const sector = allSectors.find(s => s.id === ticket.sectorId);
         const sectorGroupId = sector?.whatsappGroupId;
         
@@ -137,10 +133,10 @@ export default function ExternalTicketDetailsPage() {
         }
         
         message += `\n*Atribuído por:* ${user.name}\n\n`
-                 + `*Status:* Em andamento por ${assignedTechnician?.name}`;
+                 + `*Status:* Em andamento por ${assignedUser?.name}`;
 
-        if (techUser?.phone) {
-            await sendWhatsappMessage(techUser.phone, message, techUser.id, `/external-tickets/${ticket.id}`);
+        if (assignedUser?.phone) {
+            await sendWhatsappMessage(assignedUser.phone, message, assignedUser.id, `/external-tickets/${ticket.id}`);
         }
         if (sectorGroupId) {
             await sendWhatsappMessage(sectorGroupId, message);
@@ -148,7 +144,7 @@ export default function ExternalTicketDetailsPage() {
 
         toast({
             title: 'Chamado Atribuído!',
-            description: `Chamado #${ticket.id.substring(0,4)} atribuído a ${assignedTechnician?.name || 'técnico'}.`
+            description: `Chamado #${ticket.id.substring(0,4)} atribuído a ${assignedUser?.name || 'usuário'}.`
         });
     } catch (error) {
         console.error('Error assigning technician:', error);
@@ -399,7 +395,6 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
             onUploadChecklistPhoto={handleChecklistPhotoUpload}
             currentUser={user}
             users={users}
-            allTechnicians={technicians}
             allSectors={allSectors}
             allChecklists={checklists}
         />

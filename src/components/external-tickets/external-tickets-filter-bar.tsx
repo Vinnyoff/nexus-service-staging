@@ -47,15 +47,15 @@ export function ExternalTicketsFilterBar({
   currentUser,
   sectors
 }: ExternalTicketsFilterBarProps) {
-    const [allTechnicians, setAllTechnicians] = useState<Technician[]>([]);
+    const [allUsers, setAllUsers] = useState<User[]>([]);
     
     useEffect(() => {
-        const fetchTechnicians = async () => {
-            const querySnapshot = await getDocs(collection(db, "technicians"));
-            const techData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Technician));
-            setAllTechnicians(techData);
+        const fetchUsers = async () => {
+            const querySnapshot = await getDocs(collection(db, "users"));
+            const usersData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+            setAllUsers(usersData);
         };
-        fetchTechnicians();
+        fetchUsers();
     }, []);
     
     const canFilterBySector = useMemo(() => {
@@ -73,8 +73,10 @@ export function ExternalTicketsFilterBar({
         return sectors;
     }, [currentUser, sectors]);
 
-    const visibleTechnicians = useMemo(() => {
-        if (!currentUser) return [];
+    const assignableUsers = useMemo(() => {
+      const fieldStaff = allUsers.filter(u => u.role === 'tecnico' || u.role === 'encarregado');
+      
+      if (!currentUser) return [];
 
         let techSectorFilter = sectorFilter;
         // Se o usuário é um técnico ou um supervisor de um único setor, filtre por esse setor
@@ -82,23 +84,20 @@ export function ExternalTicketsFilterBar({
             techSectorFilter = currentUser.sectorIds?.[0] || 'all';
         }
 
-        return allTechnicians.filter(tech => {
+        return fieldStaff.filter(user => {
             if (techSectorFilter === 'all') {
                 if (currentUser.role === 'encarregado') {
-                    // Encarregado vê todos os técnicos de todos os seus setores
-                    return tech.sectorIds?.some(id => currentUser.sectorIds?.includes(id));
+                    return user.sectorIds?.some(id => currentUser.sectorIds?.includes(id));
                 }
                  if (currentUser.role === 'admin' || currentUser.role === 'gerente') {
-                    return true; // Admin/Gerente vê todos
+                    return true;
                 }
-                // Técnico vê apenas os do seu próprio setor
-                return tech.sectorIds?.some(id => currentUser.sectorIds?.includes(id));
+                return user.sectorIds?.some(id => currentUser.sectorIds?.includes(id));
             }
-            // Filtro por setor específico selecionado
-            return tech.sectorIds?.includes(techSectorFilter);
+            return user.sectorIds?.includes(techSectorFilter);
         });
 
-    }, [currentUser, allTechnicians, sectorFilter]);
+    }, [currentUser, allUsers, sectorFilter]);
 
     const isTechnicianFilterDisabled = statusFilter === 'pendente';
 
@@ -159,8 +158,8 @@ export function ExternalTicketsFilterBar({
                 </SelectTrigger>
                 <SelectContent>
                 <SelectItem value="all">Todos os técnicos</SelectItem>
-                {visibleTechnicians.map(tech => (
-                    <SelectItem key={tech.id} value={tech.id}>{tech.name}</SelectItem>
+                {assignableUsers.map(user => (
+                    <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
                 ))}
                 </SelectContent>
             </Select>

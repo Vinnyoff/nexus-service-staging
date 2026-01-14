@@ -100,7 +100,6 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
     const [addressMode, setAddressMode] = useState<'api' | 'manual' | 'none'>('none');
     const [sectors, setSectors] = useState<Sector[]>([]);
     const [users, setUsers] = useState<User[]>([]);
-    const [technicians, setTechnicians] = useState<Technician[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
     const [checklists, setChecklists] = useState<Checklist[]>([]);
     const [openClientSelector, setOpenClientSelector] = useState(false);
@@ -116,11 +115,10 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
-                const [sectorsSnapshot, usersSnapshot, clientsSnapshot, techsSnapshot, checklistsSnapshot] = await Promise.all([
+                const [sectorsSnapshot, usersSnapshot, clientsSnapshot, checklistsSnapshot] = await Promise.all([
                     getDocs(collection(db, "sectors")),
                     getDocs(collection(db, "users")),
                     getDocs(collection(db, "clients")),
-                    getDocs(collection(db, "technicians")),
                     getDocs(collection(db, "checklists")),
                 ]);
 
@@ -128,13 +126,11 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                 const usersData = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
                 const clientsData = clientsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client))
                   .sort((a, b) => a.name.localeCompare(b.name));
-                const techsData = techsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Technician));
                 const checklistsData = checklistsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Checklist));
 
                 setSectors(sectorsData);
                 setUsers(usersData);
                 setClients(clientsData);
-                setTechnicians(techsData);
                 setChecklists(checklistsData);
 
             } catch (error) {
@@ -189,10 +185,10 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
     const isContract = form.watch("isContract");
     const selectedSectorId = form.watch("sectorId");
     
-    const filteredTechnicians = useMemo(() => {
+    const assignableUsers = useMemo(() => {
         if (!selectedSectorId) return [];
-        return technicians.filter(t => t.sectorIds && t.sectorIds.includes(selectedSectorId));
-    }, [technicians, selectedSectorId]);
+        return users.filter(u => (u.role === 'tecnico' || u.role === 'encarregado') && u.sectorIds?.includes(selectedSectorId));
+    }, [users, selectedSectorId]);
     
      const filteredChecklists = useMemo(() => {
         if (!selectedSectorId) return [];
@@ -772,9 +768,9 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                                     </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                    {filteredTechnicians.map((technician) => (
-                                    <SelectItem key={technician.id} value={technician.id}>
-                                        {technician.name}
+                                    {assignableUsers.map((user) => (
+                                    <SelectItem key={user.id} value={user.id}>
+                                        {user.name}
                                     </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -981,3 +977,4 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
         </Form>
     );
 }
+
