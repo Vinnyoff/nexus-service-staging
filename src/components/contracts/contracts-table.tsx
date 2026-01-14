@@ -99,64 +99,61 @@ export function ContractsTable({ data, sectors, checklists, onUpdateContract }: 
       }
   };
 
-  const tableColumns = React.useMemo(() => {
-    const columns: ColumnDef<ServiceContract>[] = [
-      {
-        accessorKey: "clientName",
-        header: ({ column }) => (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          >
-            Cliente
-            <ArrowUpDown className="ml-2 h-4 w-4" />
-          </Button>
-        ),
-        cell: ({ row }) => <div className="capitalize">{row.getValue("clientName")}</div>,
-      },
-      {
-        accessorKey: "description",
-        header: "Descrição",
-        cell: ({ row }) => <div className="text-muted-foreground truncate max-w-xs">{row.getValue("description") || 'N/A'}</div>,
-      },
-      {
-        accessorKey: "frequencyDays",
-        header: "Frequência",
-        cell: ({ row }) => <div>{row.getValue("frequencyDays")} dias</div>,
-      },
-      {
-        accessorKey: "sectorIds",
-        header: "Setores",
-        cell: ({ row }) => {
-            const sectorIds = row.getValue("sectorIds") as string[];
-            const sectorNames = sectorIds.map(id => sectors.find(s => s.id === id)?.name).filter(Boolean);
-            return (
-                <div className="flex flex-wrap gap-1">
-                    {sectorNames.map(name => <Badge key={name} variant="secondary">{name}</Badge>)}
-                </div>
-            )
-        }
-      },
-      {
-        accessorKey: "status",
-        header: "Status",
-        cell: ({ row }) => (
-          <Badge variant={row.getValue("status") === 'active' ? "default" : "destructive"} className="capitalize">{row.getValue("status") === 'active' ? 'Ativo' : 'Inativo'}</Badge>
-        ),
-      },
-       {
-        accessorKey: "createdAt",
-        header: "Criado em",
-        cell: ({ row }) => <div>{format(new Date(row.getValue("createdAt")), "dd/MM/yyyy")}</div>,
-      },
-      {
-        id: "actions",
-        enableHiding: false,
-        cell: ({ row }) => <ActionsCell row={row} />,
-      },
-    ];
-    return columns;
-  }, [sectors]);
+  const tableColumns: ColumnDef<ServiceContract>[] = React.useMemo(() => [
+    {
+      accessorKey: "clientName",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Cliente
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => <div className="capitalize">{row.getValue("clientName")}</div>,
+    },
+    {
+      accessorKey: "description",
+      header: "Descrição",
+      cell: ({ row }) => <div className="text-muted-foreground truncate max-w-xs">{row.getValue("description") || 'N/A'}</div>,
+    },
+    {
+      accessorKey: "frequencyDays",
+      header: "Frequência",
+      cell: ({ row }) => <div>{row.getValue("frequencyDays")} dias</div>,
+    },
+    {
+      accessorKey: "sectorIds",
+      header: "Setores",
+      cell: ({ row }) => {
+          const sectorIds = row.getValue("sectorIds") as string[];
+          const sectorNames = sectorIds.map(id => sectors.find(s => s.id === id)?.name).filter(Boolean);
+          return (
+              <div className="flex flex-wrap gap-1">
+                  {sectorNames.map(name => <Badge key={name} variant="secondary">{name}</Badge>)}
+              </div>
+          )
+      }
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => (
+        <Badge variant={row.getValue("status") === 'active' ? "default" : "destructive"} className="capitalize">{row.getValue("status") === 'active' ? 'Ativo' : 'Inativo'}</Badge>
+      ),
+    },
+     {
+      accessorKey: "createdAt",
+      header: "Criado em",
+      cell: ({ row }) => <div>{format(new Date(row.getValue("createdAt")), "dd/MM/yyyy")}</div>,
+    },
+    {
+      id: "actions",
+      enableHiding: false,
+      cell: ({ row }) => <ActionsCell row={row} />,
+    },
+  ], [sectors]);
 
   const filteredData = React.useMemo(() => {
     if (showInactive) return data;
@@ -325,7 +322,6 @@ export function ContractsTable({ data, sectors, checklists, onUpdateContract }: 
             <>
                 <DialogHeader>
                     <DialogTitle>Editar Contrato: {selectedContract.clientName}</DialogTitle>
-                    <DialogDescription />
                     <div className="flex items-center gap-2 pt-2">
                         <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded">
                             ID: {selectedContract.id}
