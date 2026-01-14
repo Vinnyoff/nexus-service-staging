@@ -325,24 +325,23 @@ export function ContractsTable({ data, sectors, checklists, onUpdateContract }: 
             <>
                 <DialogHeader>
                     <DialogTitle>Editar Contrato: {selectedContract.clientName}</DialogTitle>
-                    <DialogDescription>
-                        <div className="flex items-center gap-2 pt-2">
-                            <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded">
-                                ID: {selectedContract.id}
-                            </span>
-                            <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-6 w-6"
-                                onClick={() => {
-                                    navigator.clipboard.writeText(selectedContract.id);
-                                    useToast().toast({ title: "ID copiado para a área de transferência." });
-                                }}
-                                >
-                                <Copy className="h-4 w-4" />
-                            </Button>
-                        </div>
-                  </DialogDescription>
+                    <DialogDescription />
+                    <div className="flex items-center gap-2 pt-2">
+                        <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded">
+                            ID: {selectedContract.id}
+                        </span>
+                        <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-6 w-6"
+                            onClick={() => {
+                                navigator.clipboard.writeText(selectedContract.id);
+                                useToast().toast({ title: "ID copiado para a área de transferência." });
+                            }}
+                            >
+                            <Copy className="h-4 w-4" />
+                        </Button>
+                    </div>
                 </DialogHeader>
                 <EditContractForm 
                     contract={selectedContract} 
