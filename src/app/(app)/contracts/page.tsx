@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { PlusCircle, Loader2, RefreshCw } from "lucide-react";
@@ -76,7 +76,7 @@ export default function ContractsPage() {
     return []; // Return empty for other roles like 'tecnico'
   }, [contracts, user]);
 
-  const handleAddContract = async (values: NewContractFormValues) => {
+  const handleAddContract = useCallback(async (values: NewContractFormValues) => {
     if (!user) {
         toast({ variant: 'destructive', title: "Erro de Autenticação"});
         return;
@@ -162,9 +162,9 @@ export default function ContractsPage() {
         description: "Ocorreu um erro ao salvar os dados. Tente novamente.",
       });
     }
-  };
+  }, [user, clients, checklists, toast]);
 
-  const handleUpdateContract = async (contractId: string, values: EditContractFormValues, newStatus: 'active' | 'inactive') => {
+  const handleUpdateContract = useCallback(async (contractId: string, values: EditContractFormValues, newStatus: 'active' | 'inactive') => {
     const contractRef = doc(db, "serviceContracts", contractId);
     
     try {
@@ -182,9 +182,9 @@ export default function ContractsPage() {
         toast({ variant: 'destructive', title: "Erro ao atualizar contrato" });
         return false;
     }
-  };
+  }, [toast]);
 
-  const handleManualCheck = async () => {
+  const handleManualCheck = useCallback(async () => {
     setIsChecking(true);
     toast({ title: "Verificando preventivas...", description: "Aguarde, o sistema está buscando por chamados vencidos."});
     try {
@@ -206,7 +206,7 @@ export default function ContractsPage() {
     } finally {
       setIsChecking(false);
     }
-  };
+  }, [toast]);
 
   return (
     <>
