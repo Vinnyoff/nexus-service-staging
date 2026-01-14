@@ -7,7 +7,7 @@ import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { Comment, ExternalTicket, User, Sector, Technician, ServiceContract, Checklist } from '@/lib/types';
+import type { Comment, ExternalTicket, User, Sector, Technician, ServiceContract, Checklist, ChecklistTaskState } from '@/lib/types';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import { doc, onSnapshot, updateDoc, arrayUnion, collection, getDocs, deleteField, query, where, limit, addDoc, getDoc } from 'firebase/firestore';
@@ -327,6 +327,25 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
     }
   };
 
+  const handleUpdateChecklistTask = async (taskId: string, updates: Partial<ChecklistTaskState>) => {
+    if (!ticket || !ticket.checklist) return;
+
+    const ticketRef = doc(db, "external-tickets", ticket.id);
+    const newChecklistState = ticket.checklist.map(task => 
+      task.taskId === taskId ? { ...task, ...updates } : task
+    );
+
+    try {
+      await updateDoc(ticketRef, {
+        checklist: newChecklistState,
+      });
+      // A UI será atualizada pelo onSnapshot, não é necessário um toast aqui para evitar poluição.
+    } catch (error) {
+      console.error("Error updating checklist task:", error);
+      toast({ variant: 'destructive', title: 'Erro ao salvar checklist' });
+    }
+  };
+
 
   if (loading || !ticket || users.length === 0) {
     return (
@@ -358,6 +377,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
             onDescriptionChange={handleDescriptionChange}
             onAssignTechnician={handleAssignTechnician}
             onCheckIn={handleCheckIn}
+            onUpdateChecklistTask={handleUpdateChecklistTask}
             currentUser={user}
             users={users}
             allTechnicians={technicians}
@@ -367,3 +387,5 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
     </>
   );
 }
+
+    

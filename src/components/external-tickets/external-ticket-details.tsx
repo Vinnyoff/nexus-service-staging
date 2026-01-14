@@ -21,7 +21,95 @@ import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter, DialogClose } from '../ui/dialog';
 import { SignaturePad } from '../shared/signature-pad';
 import { optimizeImage, optimizeSignature } from '@/lib/image-optimizer';
+import { useDebounce } from '@/hooks/use-debounce';
 
+
+interface ChecklistItemProps {
+    task: ChecklistTaskState;
+    taskModel: { id: string; text: string };
+    disabled: boolean;
+    onUpdate: (taskId: string, updates: Partial<ChecklistTaskState>) => void;
+    ticketId: string;
+}
+
+const ChecklistItem: React.FC<ChecklistItemProps> = ({ task, taskModel, disabled, onUpdate, ticketId }) => {
+    const [observation, setObservation] = useState(task.observation || '');
+    const [isUploading, setIsUploading] = useState(false);
+
+    useDebounce(() => {
+        if (observation !== task.observation) {
+            onUpdate(task.taskId, { observation });
+        }
+    }, 1000, [observation]);
+
+    const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsUploading(true);
+        try {
+            const { storage } = await import('@/firebase/config');
+            const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
+            const optimizedPhoto = await optimizeImage(file);
+            const photoRef = ref(storage, `tickets/${ticketId}/checklists/${task.taskId}/${Date.now()}-${optimizedPhoto.name}`);
+            await uploadBytes(photoRef, optimizedPhoto);
+            const downloadURL = await getDownloadURL(photoRef);
+            onUpdate(task.taskId, { photo: downloadURL });
+        } catch (error) {
+            console.error("Error uploading checklist photo:", error);
+            // Idealmente, mostrar um toast de erro aqui.
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+
+    return (
+        <div className="space-y-3 p-3 border rounded-md bg-muted/50">
+            <div className="flex items-start gap-4">
+                <Checkbox
+                    id={`task-${task.taskId}`}
+                    checked={task.completed}
+                    onCheckedChange={(checked) => onUpdate(task.taskId, { completed: !!checked })}
+                    disabled={disabled}
+                    className="mt-1"
+                />
+                <Label htmlFor={`task-${task.taskId}`} className={cn("flex-1", task.completed && "line-through text-muted-foreground")}>
+                    {taskModel.text}
+                </Label>
+            </div>
+            <div className="pl-8 space-y-2">
+                 <Textarea
+                    placeholder="Observação (opcional)"
+                    value={observation}
+                    onChange={(e) => setObservation(e.target.value)}
+                    disabled={disabled}
+                    className="text-xs h-16"
+                />
+                <div className="flex items-center gap-2">
+                    <Input
+                        id={`photo-${task.taskId}`}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handlePhotoUpload}
+                        disabled={disabled || isUploading}
+                    />
+                     <Label htmlFor={`photo-${task.taskId}`} className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), disabled && "pointer-events-none opacity-50")}>
+                        {isUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2"/> : <Camera className="h-4 w-4 mr-2" />}
+                        {task.photo ? "Alterar Foto" : "Anexar Foto"}
+                    </Label>
+
+                    {task.photo && (
+                         <a href={task.photo} target="_blank" rel="noopener noreferrer" className={cn(buttonVariants({ variant: 'link', size: 'sm' }))}>
+                            Ver Foto
+                        </a>
+                    )}
+                </div>
+            </div>
+        </div>
+    )
+}
 
 interface ExternalTicketDetailsProps {
   ticket: ExternalTicket;
@@ -33,6 +121,7 @@ interface ExternalTicketDetailsProps {
   onDescriptionChange: (newDescription: string) => void;
   onAssignTechnician: (technicianId: string) => void;
   onCheckIn: () => void;
+  onUpdateChecklistTask: (taskId: string, updates: Partial<ChecklistTaskState>) => void;
   currentUser: User | null;
   users: User[];
   allTechnicians: Technician[];
@@ -50,6 +139,7 @@ export function ExternalTicketDetails({
     onDescriptionChange,
     onAssignTechnician,
     onCheckIn,
+    onUpdateChecklistTask,
     currentUser, 
     users,
     allTechnicians,
@@ -80,6 +170,7 @@ export function ExternalTicketDetails({
   const isCurrentUserAssigned = currentUser?.id === ticket.technicianId;
   const hasCheckedIn = !!ticket.checkIn;
   const checklistModel = ticket.checklistId ? allChecklists.find(c => c.id === ticket.checklistId) : null;
+  const isChecklistDisabled = !hasCheckedIn || !isCurrentUserAssigned;
 
   const canUserIntervene = currentUser && (
     isCurrentUserAssigned ||
@@ -279,11 +370,32 @@ export function ExternalTicketDetails({
         {checklistModel && ticket.checklist && (
              <Card>
                 <CardHeader>
-                <CardTitle className='flex items-center'><ListChecks className='mr-2 h-5 w-5'/> Checklist: {checklistModel.name}</CardTitle>
+                    <CardTitle className='flex items-center'><ListChecks className='mr-2 h-5 w-5'/> Checklist: {checklistModel.name}</CardTitle>
                 </CardHeader>
-                <CardContent>
-                    <p className='text-sm text-muted-foreground'>O preenchimento é liberado após o check-in no cliente.</p>
-                    {/* A lógica de interação do checklist será adicionada aqui */}
+                <CardContent className="space-y-3">
+                    {isChecklistDisabled && (
+                        <Alert variant="destructive">
+                            <Info className="h-4 w-4" />
+                            <AlertTitle>Check-in Necessário</AlertTitle>
+                            <AlertDescription>
+                                Você precisa fazer o check-in no cliente para poder preencher o checklist.
+                            </AlertDescription>
+                        </Alert>
+                    )}
+                    {checklistModel.tasks.map(taskModel => {
+                        const taskState = ticket.checklist!.find(t => t.taskId === taskModel.id);
+                        if (!taskState) return null;
+                        return (
+                            <ChecklistItem
+                                key={taskModel.id}
+                                task={taskState}
+                                taskModel={taskModel}
+                                disabled={isChecklistDisabled}
+                                onUpdate={onUpdateChecklistTask}
+                                ticketId={ticket.id}
+                            />
+                        )
+                    })}
                 </CardContent>
             </Card>
         )}
@@ -602,3 +714,5 @@ export function ExternalTicketDetails({
     </div>
   );
 }
+
+    
