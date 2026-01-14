@@ -36,7 +36,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import React from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useDebounce } from "@/hooks/use-debounce";
-import { useIsMobile } from "@/hooks/use-is-mobile";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const formSchema = z.object({
   clientId: z.string().optional(),
@@ -784,7 +784,7 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                             )}
                         />
                     </div>
-                     <div className="space-y-4 rounded-lg border border-blue-500/50 bg-blue-500/10 p-4">
+                    <div className="space-y-4 rounded-lg border border-blue-500/50 bg-blue-500/10 p-4">
                         <h4 className="text-md font-semibold text-blue-800 dark:text-blue-300 flex items-center">
                             <ListChecks className="h-5 w-5 mr-2"/>
                             Checklist (Opcional)
@@ -981,4 +981,3 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
         </Form>
     );
 }
-
