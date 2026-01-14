@@ -74,7 +74,7 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({ task, taskModel, disabled
                     onChange={(e) => setObservation(e.target.value)}
                     disabled={disabled}
                     rows={1}
-                    className="text-xs min-h-[40px] resize-y"
+                    className="text-xs resize-y"
                 />
                 <div className="flex items-center gap-2">
                     <Input
