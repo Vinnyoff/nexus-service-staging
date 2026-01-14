@@ -61,14 +61,6 @@ export async function generatePreventiveTickets() {
     if (!clientDoc.exists()) continue;
     const clientData = { id: clientDoc.id, ...clientDoc.data()} as Client;
     
-    let defaultChecklist: Checklist | null = null;
-    if (contract.defaultChecklistId) {
-        const checklistDoc = await getDoc(doc(db, "checklists", contract.defaultChecklistId));
-        if (checklistDoc.exists()) {
-            defaultChecklist = { id: checklistDoc.id, ...checklistDoc.data() } as Checklist;
-        }
-    }
-
 
     for (const sectorId of contract.sectorIds) {
       const lastTicket = await findLastPreventiveTicket(clientData.id, sectorId);
@@ -82,14 +74,23 @@ export async function generatePreventiveTickets() {
         console.log(`Gerando chamado preventivo para ${clientData.name} no setor ${sectorId}.`);
         
         let checklistState: ChecklistTaskState[] | undefined = undefined;
-        if (defaultChecklist && contract.sectorIds.includes(defaultChecklist.sectorId)) {
-            checklistState = defaultChecklist.tasks.map(task => ({
-              taskId: task.id,
-              completed: false,
-              observation: '',
-              photo: ''
-            }));
+        let checklistId: string | undefined = undefined;
+
+        const defaultChecklistId = contract.defaultChecklists?.[sectorId];
+        if(defaultChecklistId) {
+            const checklistDoc = await getDoc(doc(db, "checklists", defaultChecklistId));
+             if (checklistDoc.exists()) {
+                const checklist = { id: checklistDoc.id, ...checklistDoc.data() } as Checklist;
+                checklistId = checklist.id;
+                checklistState = checklist.tasks.map(task => ({
+                  taskId: task.id,
+                  completed: false,
+                  observation: '',
+                  photo: ''
+                }));
+            }
         }
+
 
         const newTicketData: Omit<ExternalTicket, 'id'> = {
           client: {
@@ -117,7 +118,7 @@ export async function generatePreventiveTickets() {
           enRoute: null,
           enRouteAt: null,
           slaExpiresAt: null,
-          ...(defaultChecklist && { checklistId: defaultChecklist.id, checklist: checklistState })
+          ...(checklistId && { checklistId: checklistId, checklist: checklistState })
         };
 
         try {

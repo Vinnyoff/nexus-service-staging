@@ -73,7 +73,6 @@ export default function ContractsPage() {
         toast({ variant: 'destructive', title: "Cliente ou endereço não encontrado"});
         return;
     }
-    const defaultChecklist = checklists.find(c => c.id === values.defaultChecklistId);
     
     try {
       const batch = writeBatch(db);
@@ -88,7 +87,7 @@ export default function ContractsPage() {
         status: 'active',
         createdAt: now.toISOString(),
         updatedAt: now.toISOString(),
-        ...(values.defaultChecklistId && { defaultChecklistId: values.defaultChecklistId }),
+        ...(values.defaultChecklists && { defaultChecklists: values.defaultChecklists }),
       };
       
       const contractRef = doc(collection(db, "serviceContracts"));
@@ -99,13 +98,18 @@ export default function ContractsPage() {
           const ticketRef = doc(collection(db, "external-tickets"));
           
           let checklistState: ChecklistTaskState[] | undefined = undefined;
-          if (defaultChecklist && defaultChecklist.sectorId === sectorId) {
-            checklistState = defaultChecklist.tasks.map(task => ({
-              taskId: task.id,
-              completed: false,
-              observation: '',
-              photo: ''
-            }));
+          const defaultChecklistId = values.defaultChecklists?.[sectorId];
+          
+          if(defaultChecklistId) {
+            const checklist = checklists.find(c => c.id === defaultChecklistId);
+            if (checklist) {
+                checklistState = checklist.tasks.map(task => ({
+                  taskId: task.id,
+                  completed: false,
+                  observation: '',
+                  photo: ''
+                }));
+            }
           }
 
           const newTicketData: Omit<ExternalTicket, 'id'> = {
@@ -124,7 +128,7 @@ export default function ContractsPage() {
               status: 'pendente',
               createdAt: now.toISOString(),
               updatedAt: now.toISOString(),
-              ...(defaultChecklist && { checklistId: defaultChecklist.id, checklist: checklistState })
+              ...(defaultChecklistId && { checklistId: defaultChecklistId, checklist: checklistState })
           };
           batch.set(ticketRef, newTicketData);
       }

@@ -23,6 +23,7 @@ import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Textarea } from "../ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { Separator } from "../ui/separator";
 
 
 const formSchema = z.object({
@@ -30,7 +31,7 @@ const formSchema = z.object({
   description: z.string().optional(),
   frequencyDays: z.coerce.number().positive({ message: "A frequência deve ser maior que zero." }),
   sectorIds: z.array(z.string()).min(1, { message: "Selecione pelo menos um setor." }),
-  defaultChecklistId: z.string().optional(),
+  defaultChecklists: z.record(z.string()).optional(),
 });
 
 export type NewContractFormValues = z.infer<typeof formSchema>;
@@ -55,17 +56,11 @@ export function NewContractForm({ clients, sectors, checklists, onSave, onFinish
         description: "",
         frequencyDays: 30,
         sectorIds: [],
-        defaultChecklistId: undefined,
+        defaultChecklists: {},
     },
   });
   
   const selectedSectors = form.watch("sectorIds");
-
-  const availableChecklists = useMemo(() => {
-    if (!selectedSectors || selectedSectors.length === 0) return [];
-    return checklists.filter(c => selectedSectors.includes(c.sectorId) && c.status === 'active');
-  }, [checklists, selectedSectors]);
-
 
   async function onSubmit(values: NewContractFormValues) {
     setIsSaving(true);
@@ -232,30 +227,44 @@ export function NewContractForm({ clients, sectors, checklists, onSave, onFinish
                 )}
             />
             
-            <FormField
-                control={form.control}
-                name="defaultChecklistId"
-                render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Checklist Padrão (Opcional)</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value} disabled={availableChecklists.length === 0}>
-                            <FormControl>
-                                <SelectTrigger>
-                                <SelectValue placeholder={availableChecklists.length === 0 ? "Selecione um setor primeiro" : "Nenhum checklist padrão"} />
-                                </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                                {availableChecklists.map((checklist) => (
-                                <SelectItem key={checklist.id} value={checklist.id}>
-                                    {checklist.name}
-                                </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <FormMessage />
-                    </FormItem>
-                )}
-            />
+            {selectedSectors && selectedSectors.length > 0 && (
+                <div className="space-y-4 pt-4 border-t">
+                     <h3 className="text-md font-medium text-foreground">Checklists Padrão por Setor</h3>
+                     {selectedSectors.map(sectorId => {
+                         const sector = sectors.find(s => s.id === sectorId);
+                         if (!sector) return null;
+                         const availableChecklists = checklists.filter(c => c.sectorId === sectorId && c.status === 'active');
+                         return (
+                              <FormField
+                                key={sectorId}
+                                control={form.control}
+                                name={`defaultChecklists.${sectorId}`}
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>{sector.name}</FormLabel>
+                                        <Select onValueChange={field.onChange} value={field.value} disabled={availableChecklists.length === 0}>
+                                            <FormControl>
+                                                <SelectTrigger>
+                                                <SelectValue placeholder={availableChecklists.length === 0 ? "Nenhum checklist para este setor" : "Nenhum"} />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                <SelectItem value="_none_">Nenhum</SelectItem>
+                                                {availableChecklists.map((checklist) => (
+                                                <SelectItem key={checklist.id} value={checklist.id}>
+                                                    {checklist.name}
+                                                </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                         )
+                     })}
+                </div>
+            )}
         </div>
 
         <div className="flex justify-end gap-2 pt-4 border-t">

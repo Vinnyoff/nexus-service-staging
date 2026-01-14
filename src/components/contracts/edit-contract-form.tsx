@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Sector, ServiceContract, Checklist } from "@/lib/types";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -30,7 +30,7 @@ const formSchema = z.object({
   description: z.string().optional(),
   frequencyDays: z.coerce.number().positive({ message: "A frequência deve ser maior que zero." }),
   sectorIds: z.array(z.string()).min(1, { message: "Selecione pelo menos um setor." }),
-  defaultChecklistId: z.string().optional(),
+  defaultChecklists: z.record(z.string()).optional(),
   status: z.enum(['active', 'inactive']),
 });
 
@@ -53,26 +53,27 @@ export function EditContractForm({ contract, sectors, checklists, onSave, onFini
         description: contract.description || "",
         frequencyDays: contract.frequencyDays,
         sectorIds: contract.sectorIds,
-        defaultChecklistId: contract.defaultChecklistId || "_none_",
+        defaultChecklists: contract.defaultChecklists || {},
         status: contract.status,
     },
   });
   
   const selectedSectors = form.watch("sectorIds");
 
-  const availableChecklists = useMemo(() => {
-    if (!selectedSectors || selectedSectors.length === 0) return [];
-    return checklists.filter(c => selectedSectors.includes(c.sectorId) && c.status === 'active');
-  }, [checklists, selectedSectors]);
-
-
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSaving(true);
-    // Treat the special value as an empty string before saving
-    const valuesToSave = {
-      ...values,
-      defaultChecklistId: values.defaultChecklistId === '_none_' ? '' : values.defaultChecklistId
+    // Remove checklists for sectors that are no longer in the contract
+    const finalChecklists: Record<string, string> = {};
+    if (values.defaultChecklists) {
+        for (const sectorId of values.sectorIds) {
+            if (values.defaultChecklists[sectorId] && values.defaultChecklists[sectorId] !== '_none_') {
+                finalChecklists[sectorId] = values.defaultChecklists[sectorId];
+            }
+        }
     }
+    
+    const valuesToSave = { ...values, defaultChecklists: finalChecklists };
+
     const { status, ...otherValues } = valuesToSave;
     await onSave(contract.id, otherValues, status);
     setIsSaving(false);
@@ -172,31 +173,44 @@ export function EditContractForm({ contract, sectors, checklists, onSave, onFini
                 )}
             />
             
-            <FormField
-                control={form.control}
-                name="defaultChecklistId"
-                render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Checklist Padrão (Opcional)</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value} disabled={availableChecklists.length === 0}>
-                            <FormControl>
-                                <SelectTrigger>
-                                <SelectValue placeholder={availableChecklists.length === 0 ? "Selecione um setor primeiro" : "Nenhum checklist padrão"} />
-                                </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                                 <SelectItem value="_none_">Nenhum</SelectItem>
-                                {availableChecklists.map((checklist) => (
-                                <SelectItem key={checklist.id} value={checklist.id}>
-                                    {checklist.name}
-                                </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <FormMessage />
-                    </FormItem>
-                )}
-            />
+            {selectedSectors && selectedSectors.length > 0 && (
+                <div className="space-y-4 pt-4 border-t">
+                     <h3 className="text-md font-medium text-foreground">Checklists Padrão por Setor</h3>
+                     {selectedSectors.map(sectorId => {
+                         const sector = sectors.find(s => s.id === sectorId);
+                         if (!sector) return null;
+                         const availableChecklists = checklists.filter(c => c.sectorId === sectorId && c.status === 'active');
+                         return (
+                              <FormField
+                                key={sectorId}
+                                control={form.control}
+                                name={`defaultChecklists.${sectorId}`}
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>{sector.name}</FormLabel>
+                                        <Select onValueChange={field.onChange} value={field.value || '_none_'} disabled={availableChecklists.length === 0}>
+                                            <FormControl>
+                                                <SelectTrigger>
+                                                <SelectValue placeholder={availableChecklists.length === 0 ? "Nenhum checklist para este setor" : "Nenhum"} />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                <SelectItem value="_none_">Nenhum</SelectItem>
+                                                {availableChecklists.map((checklist) => (
+                                                <SelectItem key={checklist.id} value={checklist.id}>
+                                                    {checklist.name}
+                                                </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                         )
+                     })}
+                </div>
+            )}
             
             <Separator className="my-4" />
             

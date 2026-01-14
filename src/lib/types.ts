@@ -109,7 +109,7 @@ export interface ServiceContract {
   clientName: string;
   description?: string;
   sectorIds: string[];
-  defaultChecklistId?: string;
+  defaultChecklists?: Record<string, string>; // sectorId: checklistId
   frequencyDays: number;
   status: 'active' | 'inactive';
   createdAt: string;
