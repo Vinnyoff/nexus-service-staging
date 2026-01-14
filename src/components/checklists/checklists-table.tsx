@@ -147,6 +147,7 @@ export function ChecklistsTable({ data, sectors, onUpdateChecklist }: Checklists
   ]
   
   const userVisibleData = React.useMemo(() => {
+    if (!user) return [];
     if (user?.role === 'admin' || user?.role === 'gerente') {
       return data;
     }
@@ -162,8 +163,9 @@ export function ChecklistsTable({ data, sectors, onUpdateChecklist }: Checklists
   }, [userVisibleData, showArchived]);
   
   const visibleSectors = sectors.filter(s => {
+      if(!user) return [];
       if(user?.role === 'admin' || user?.role === 'gerente') return true;
-      if(user?.role === 'encarregado') return user.sectorIds?.includes(s.id);
+      if(user?.role === 'encarregado') return user.sectorIds.includes(s.id);
       return false;
   });
 
@@ -352,3 +354,11 @@ export function ChecklistsTable({ data, sectors, onUpdateChecklist }: Checklists
                         sectors={visibleSectors}
                         onSave={handleSaveEdit} 
                         onFinished={() => setIsEditOpen(false)}
+                    />
+                </>
+            )}
+            </DialogContent>
+        </Dialog>
+    </div>
+  )
+}

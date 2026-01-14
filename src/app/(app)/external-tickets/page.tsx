@@ -8,12 +8,12 @@ import { Button } from "@/components/ui/button";
 import { PlusCircle, Loader2, LayoutDashboard, List, RefreshCcw } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { NewExternalTicketForm, NewExternalTicketFormValues } from "@/components/external-tickets/new-external-ticket-form";
-import { ExternalTicket, Sector, User, Technician, Comment } from "@/lib/types";
+import { ExternalTicket, Sector, User, Technician, Comment, Checklist, ChecklistTaskState } from "@/lib/types";
 import { useAuth } from "@/hooks/use-auth";
 import { ExternalTicketCard } from "@/components/external-tickets/external-ticket-card";
 import { ExternalTicketsFilterBar, StatusFilter } from "@/components/external-tickets/external-tickets-filter-bar";
 import { useToast } from "@/hooks/use-toast";
-import { addDoc, collection, getDocs, doc, updateDoc, deleteField, writeBatch, onSnapshot, arrayUnion } from "firebase/firestore";
+import { addDoc, collection, getDocs, doc, updateDoc, deleteField, writeBatch, onSnapshot, arrayUnion, getDoc } from "firebase/firestore";
 import { db } from "@/firebase/config";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { isToday, parseISO, isPast } from "date-fns";
@@ -43,6 +43,7 @@ export default function ExternalTicketsPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
+  const [checklists, setChecklists] = useState<Checklist[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
   const router = useRouter();
@@ -103,6 +104,10 @@ export default function ExternalTicketsPage() {
         setTickets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ExternalTicket)));
         setPullDistance(0);
     }, () => setTickets([]));
+    
+    const unsubChecklists = onSnapshot(collection(db, "checklists"), (snapshot) => {
+        setChecklists(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Checklist)));
+    }, () => setChecklists([]));
 
     // Failsafe to turn off loading
     const timer = setTimeout(() => setLoading(false), 3000);
@@ -112,6 +117,7 @@ export default function ExternalTicketsPage() {
         unsubSectors();
         unsubTechs();
         unsubTickets();
+        unsubChecklists();
         clearTimeout(timer);
     };
 }, []);
@@ -182,7 +188,7 @@ export default function ExternalTicketsPage() {
   const handleAddTicket = async (values: NewExternalTicketFormValues & { type: 'padrão' | 'contrato' | 'urgente' | 'agendado' | 'retorno', slaExpiresAt?: string, priority?: string }) => {
     if (!user) return;
   
-    const newTicketData: Omit<ExternalTicket, 'id'> = {
+    const newTicketData: Partial<ExternalTicket> = {
       client: {
         id: '', // Will be filled if clientId exists
         name: values.clientName,
@@ -193,7 +199,7 @@ export default function ExternalTicketsPage() {
       creatorId: user.id,
       description: values.description,
       type: values.type,
-      status: 'pendente', // Default status
+      status: 'pendente' as const, // Default status
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       ...(values.priority && { priority: values.priority as any }),
@@ -224,6 +230,14 @@ export default function ExternalTicketsPage() {
   
     if (values.slaExpiresAt) {
       newTicketData.slaExpiresAt = values.slaExpiresAt;
+    }
+
+    if (values.checklistId) {
+      const selectedChecklist = checklists.find(c => c.id === values.checklistId);
+      if(selectedChecklist) {
+          newTicketData.checklistId = values.checklistId;
+          newTicketData.checklist = selectedChecklist.tasks.map(task => ({ taskId: task.id, completed: false, observation: '', photo: '' }));
+      }
     }
   
     try {
@@ -693,3 +707,4 @@ export default function ExternalTicketsPage() {
     </>
   );
 }
+

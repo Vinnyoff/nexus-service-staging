@@ -26,7 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
-import { Client, Sector, User, Technician } from "@/lib/types";
+import { Client, Sector, User, Technician, Checklist } from "@/lib/types";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/firebase/config";
 import { useAuth } from "@/hooks/use-auth";
@@ -58,6 +58,7 @@ const formSchema = z.object({
   }).optional(),
   sectorId: z.string().min(1, { message: "O setor é obrigatório." }),
   assigneeId: z.string().optional(),
+  checklistId: z.string().optional(),
   scheduledToDate: z.date().optional(),
   scheduledToTime: z.string().optional(),
   hasCustomSla: z.boolean().default(false),
@@ -83,7 +84,7 @@ export type NewExternalTicketFormValues = z.infer<typeof formSchema>;
 
 interface NewExternalTicketFormProps {
   onFinished: () => void;
-  onSave: (values: NewExternalTicketFormValues & { type: 'padrão' | 'contrato' | 'urgente' | 'agendado' | 'retorno', slaExpiresAt?: string, priority?: string }) => Promise<void>;
+  onSave: (values: NewExternalTicketFormValues & { type: 'padrão' | 'contrato' | 'urgente' | 'agendado' | 'retorno', slaExpiresAt?: string, priority?: string, checklist?: { taskId: string, completed: boolean }[] }) => Promise<void>;
 }
 
 const steps = [
@@ -101,6 +102,7 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
     const [users, setUsers] = useState<User[]>([]);
     const [technicians, setTechnicians] = useState<Technician[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
+    const [checklists, setChecklists] = useState<Checklist[]>([]);
     const [openClientSelector, setOpenClientSelector] = useState(false);
     const [clientSearch, setClientSearch] = useState("");
     const [isSaving, setIsSaving] = useState(false);
@@ -114,11 +116,12 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
-                const [sectorsSnapshot, usersSnapshot, clientsSnapshot, techsSnapshot] = await Promise.all([
+                const [sectorsSnapshot, usersSnapshot, clientsSnapshot, techsSnapshot, checklistsSnapshot] = await Promise.all([
                     getDocs(collection(db, "sectors")),
                     getDocs(collection(db, "users")),
                     getDocs(collection(db, "clients")),
                     getDocs(collection(db, "technicians")),
+                    getDocs(collection(db, "checklists")),
                 ]);
 
                 const sectorsData = sectorsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sector));
@@ -126,11 +129,13 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                 const clientsData = clientsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client))
                   .sort((a, b) => a.name.localeCompare(b.name));
                 const techsData = techsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Technician));
+                const checklistsData = checklistsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Checklist));
 
                 setSectors(sectorsData);
                 setUsers(usersData);
                 setClients(clientsData);
                 setTechnicians(techsData);
+                setChecklists(checklistsData);
 
             } catch (error) {
                 console.error("Error fetching form data: ", error);
@@ -174,6 +179,7 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                 state: "RO",
             },
             sectorId: user?.role === 'tecnico' && user.sectorIds?.length === 1 ? user.sectorIds[0] : undefined,
+            checklistId: undefined,
             scheduledToTime: "",
             hasCustomSla: false,
             customSlaHours: undefined,
@@ -187,6 +193,11 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
         if (!selectedSectorId) return [];
         return technicians.filter(t => t.sectorIds && t.sectorIds.includes(selectedSectorId));
     }, [technicians, selectedSectorId]);
+    
+     const filteredChecklists = useMemo(() => {
+        if (!selectedSectorId) return [];
+        return checklists.filter(c => c.sectorId === selectedSectorId && c.status === 'active');
+    }, [checklists, selectedSectorId]);
         
     const visibleSectors = useMemo(() => {
         if (!user) return [];
@@ -300,6 +311,13 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
             if (slaHours) {
                 const now = new Date();
                 finalValues.slaExpiresAt = addHours(now, slaHours).toISOString();
+            }
+
+            if (values.checklistId) {
+                const selectedChecklist = checklists.find(c => c.id === values.checklistId);
+                if(selectedChecklist) {
+                    finalValues.checklist = selectedChecklist.tasks.map(task => ({ taskId: task.id, completed: false }));
+                }
             }
             
             await onSave(finalValues);
@@ -720,6 +738,7 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                                     onValueChange={(value) => {
                                         field.onChange(value)
                                         form.setValue('assigneeId', undefined)
+                                        form.setValue('checklistId', undefined)
                                     }} 
                                     value={field.value}
                                 >
@@ -765,6 +784,30 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                             )}
                         />
                     </div>
+                    <FormField
+                        control={form.control}
+                        name="checklistId"
+                        render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Checklist (Opcional)</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value} disabled={!selectedSectorId}>
+                            <FormControl>
+                                <SelectTrigger>
+                                <SelectValue placeholder={!selectedSectorId ? "Selecione um setor primeiro" : "Selecione um checklist"} />
+                                </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                                {filteredChecklists.map((checklist) => (
+                                <SelectItem key={checklist.id} value={checklist.id}>
+                                    {checklist.name}
+                                </SelectItem>
+                                ))}
+                            </SelectContent>
+                            </Select>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                    />
                     <Separator className="my-4"/>
                      <div className="space-y-4 rounded-lg border border-amber-500/50 bg-amber-500/10 p-4">
                         <h4 className="text-md font-semibold text-amber-800 dark:text-amber-300 flex items-center">
@@ -934,3 +977,4 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
         </Form>
     );
 }
+

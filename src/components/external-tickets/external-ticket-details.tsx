@@ -1,11 +1,11 @@
 
 
-import type { ExternalTicket, User, Technician, Sector } from '@/lib/types';
+import type { ExternalTicket, User, Technician, Sector, Checklist, ChecklistTaskState } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Calendar, User as UserIcon, Phone, MapPin, AlertCircle, ExternalLink, MessageSquare, Hand, CheckCircle, MapPinned, Undo, History, Camera, Loader2, Edit, Info, Pencil } from 'lucide-react';
+import { Calendar, User as UserIcon, Phone, MapPin, AlertCircle, ExternalLink, MessageSquare, Hand, CheckCircle, MapPinned, Undo, History, Camera, Loader2, Edit, Info, Pencil, ListChecks } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '../ui/badge';
 import { Separator } from '../ui/separator';
@@ -37,6 +37,7 @@ interface ExternalTicketDetailsProps {
   users: User[];
   allTechnicians: Technician[];
   allSectors: Sector[];
+  allChecklists: Checklist[];
 }
 
 export function ExternalTicketDetails({ 
@@ -53,6 +54,7 @@ export function ExternalTicketDetails({
     users,
     allTechnicians,
     allSectors,
+    allChecklists,
 }: ExternalTicketDetailsProps) {
   const [newComment, setNewComment] = useState('');
   const [observations, setObservations] = useState('');
@@ -77,6 +79,7 @@ export function ExternalTicketDetails({
   const canTakeAction = !isConcluded && !isCancelled;
   const isCurrentUserAssigned = currentUser?.id === ticket.technicianId;
   const hasCheckedIn = !!ticket.checkIn;
+  const checklistModel = ticket.checklistId ? allChecklists.find(c => c.id === ticket.checklistId) : null;
 
   const canUserIntervene = currentUser && (
     isCurrentUserAssigned ||
@@ -272,6 +275,18 @@ export function ExternalTicketDetails({
             )}
           </CardContent>
         </Card>
+        
+        {checklistModel && ticket.checklist && (
+             <Card>
+                <CardHeader>
+                <CardTitle className='flex items-center'><ListChecks className='mr-2 h-5 w-5'/> Checklist: {checklistModel.name}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <p className='text-sm text-muted-foreground'>O preenchimento é liberado após o check-in no cliente.</p>
+                    {/* A lógica de interação do checklist será adicionada aqui */}
+                </CardContent>
+            </Card>
+        )}
 
         {isConcluded && ticket.technicalReport && (
           <Card>

@@ -7,7 +7,7 @@ import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { Comment, ExternalTicket, User, Sector, Technician, ServiceContract } from '@/lib/types';
+import type { Comment, ExternalTicket, User, Sector, Technician, ServiceContract, Checklist } from '@/lib/types';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import { doc, onSnapshot, updateDoc, arrayUnion, collection, getDocs, deleteField, query, where, limit, addDoc, getDoc } from 'firebase/firestore';
@@ -29,6 +29,7 @@ export default function ExternalTicketDetailsPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [allSectors, setAllSectors] = useState<Sector[]>([]);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
+  const [checklists, setChecklists] = useState<Checklist[]>([]);
   const [loading, setLoading] = useState(true);
 
 
@@ -48,15 +49,17 @@ export default function ExternalTicketDetailsPage() {
 
     const fetchRelatedData = async () => {
         try {
-            const [usersSnapshot, sectorsSnapshot, techsSnapshot] = await Promise.all([
+            const [usersSnapshot, sectorsSnapshot, techsSnapshot, checklistsSnapshot] = await Promise.all([
                 getDocs(collection(db, "users")),
                 getDocs(collection(db, "sectors")),
-                getDocs(collection(db, "technicians"))
+                getDocs(collection(db, "technicians")),
+                getDocs(collection(db, "checklists")),
             ]);
             
             setUsers(usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
             setAllSectors(sectorsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sector)));
             setTechnicians(techsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Technician)));
+            setChecklists(checklistsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Checklist)));
         } catch (error) {
             console.error("Error fetching related data: ", error);
             toast({ variant: 'destructive', title: 'Erro ao carregar dados de suporte' });
@@ -359,6 +362,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
             users={users}
             allTechnicians={technicians}
             allSectors={allSectors}
+            allChecklists={checklists}
         />
     </>
   );
