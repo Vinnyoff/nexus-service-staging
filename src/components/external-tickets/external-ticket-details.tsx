@@ -30,10 +30,10 @@ interface ChecklistItemProps {
     taskModel: { id: string; text: string };
     disabled: boolean;
     onUpdate: (taskId: string, updates: Partial<ChecklistTaskState>) => void;
-    ticketId: string;
+    onUploadPhoto: (file: File, taskId: string) => Promise<boolean>;
 }
 
-const ChecklistItem: React.FC<ChecklistItemProps> = ({ task, taskModel, disabled, onUpdate, ticketId }) => {
+const ChecklistItem: React.FC<ChecklistItemProps> = ({ task, taskModel, disabled, onUpdate, onUploadPhoto }) => {
     const [observation, setObservation] = useState(task.observation || '');
     const [isUploading, setIsUploading] = useState(false);
 
@@ -48,20 +48,8 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({ task, taskModel, disabled
         if (!file) return;
 
         setIsUploading(true);
-        try {
-            const { storage } = await import('@/firebase/config');
-            const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
-            const optimizedPhoto = await optimizeImage(file);
-            const photoRef = ref(storage, `tickets/${ticketId}/checklists/${task.taskId}/${Date.now()}-${optimizedPhoto.name}`);
-            await uploadBytes(photoRef, optimizedPhoto);
-            const downloadURL = await getDownloadURL(photoRef);
-            onUpdate(task.taskId, { photo: downloadURL });
-        } catch (error) {
-            console.error("Error uploading checklist photo:", error);
-            // Idealmente, mostrar um toast de erro aqui.
-        } finally {
-            setIsUploading(false);
-        }
+        await onUploadPhoto(file, task.taskId);
+        setIsUploading(false);
     };
 
 
@@ -123,6 +111,7 @@ interface ExternalTicketDetailsProps {
   onAssignTechnician: (technicianId: string) => void;
   onCheckIn: () => void;
   onUpdateChecklistTask: (taskId: string, updates: Partial<ChecklistTaskState>) => void;
+  onUploadChecklistPhoto: (file: File, taskId: string) => Promise<boolean>;
   currentUser: User | null;
   users: User[];
   allTechnicians: Technician[];
@@ -141,6 +130,7 @@ export function ExternalTicketDetails({
     onAssignTechnician,
     onCheckIn,
     onUpdateChecklistTask,
+    onUploadChecklistPhoto,
     currentUser, 
     users,
     allTechnicians,
@@ -393,7 +383,7 @@ export function ExternalTicketDetails({
                                 taskModel={taskModel}
                                 disabled={isChecklistDisabled}
                                 onUpdate={onUpdateChecklistTask}
-                                ticketId={ticket.id}
+                                onUploadPhoto={onUploadChecklistPhoto}
                             />
                         )
                     })}
@@ -639,7 +629,7 @@ export function ExternalTicketDetails({
                     
                      <AlertDialog>
                         <AlertDialogTrigger asChild>
-                           <Button className="w-full" variant="destructive" disabled={!canUserIntervene}>
+                           <Button className="w-full" variant="destructive" onClick={() => onReturnToPending(ticket.id, reason)} disabled={!canUserIntervene}>
                                <Undo className="mr-2 h-4 w-4" /> Devolver para Pendente
                            </Button>
                         </AlertDialogTrigger>

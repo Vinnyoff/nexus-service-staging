@@ -345,6 +345,24 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
       toast({ variant: 'destructive', title: 'Erro ao salvar checklist' });
     }
   };
+  
+  const handleChecklistPhotoUpload = async (file: File, taskId: string): Promise<boolean> => {
+    if (!file) return false;
+
+    try {
+        const optimizedPhoto = await optimizeImage(file);
+        const photoRef = ref(storage, `tickets/${ticketId}/checklists/${taskId}/${Date.now()}-${optimizedPhoto.name}`);
+        await uploadBytes(photoRef, optimizedPhoto);
+        const downloadURL = await getDownloadURL(photoRef);
+        await handleUpdateChecklistTask(taskId, { photo: downloadURL });
+        toast({ title: 'Foto do checklist enviada com sucesso!'});
+        return true;
+    } catch (error) {
+        console.error("Error uploading checklist photo:", error);
+        toast({ variant: 'destructive', title: 'Erro ao enviar foto' });
+        return false;
+    }
+  };
 
 
   if (loading || !ticket || users.length === 0) {
@@ -378,6 +396,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
             onAssignTechnician={handleAssignTechnician}
             onCheckIn={handleCheckIn}
             onUpdateChecklistTask={handleUpdateChecklistTask}
+            onUploadChecklistPhoto={handleChecklistPhotoUpload}
             currentUser={user}
             users={users}
             allTechnicians={technicians}
