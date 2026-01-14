@@ -1,0 +1,164 @@
+"use client";
+
+import { useForm, useFieldArray } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { Button } from "@/components/ui/button";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Sector } from "@/lib/types";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { Trash } from "lucide-react";
+import { v4 as uuidv4 } from 'uuid';
+
+const taskSchema = z.object({
+  id: z.string(),
+  text: z.string().min(1, "A tarefa não pode estar vazia."),
+});
+
+const formSchema = z.object({
+  name: z.string().min(2, { message: "O nome deve ter pelo menos 2 caracteres." }),
+  description: z.string().optional(),
+  sectorId: z.string({ required_error: "Selecione um setor." }),
+  tasks: z.array(taskSchema).min(1, "Adicione pelo menos uma tarefa."),
+});
+
+export type NewChecklistFormValues = z.infer<typeof formSchema>;
+
+interface NewChecklistFormProps {
+  onSave: (values: NewChecklistFormValues) => void;
+  onFinished: () => void;
+  sectors: Sector[];
+}
+
+export function NewChecklistForm({ onSave, onFinished, sectors }: NewChecklistFormProps) {
+  const form = useForm<NewChecklistFormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      name: "",
+      description: "",
+      sectorId: undefined,
+      tasks: [{ id: uuidv4(), text: "" }],
+    },
+  });
+
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "tasks",
+  });
+
+  function onSubmit(values: NewChecklistFormValues) {
+    onSave(values);
+  }
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-4">
+          <FormField
+            control={form.control}
+            name="name"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Nome do Modelo</FormLabel>
+                <FormControl>
+                  <Input placeholder="Ex: Checklist de Impressora" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="description"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Descrição (Opcional)</FormLabel>
+                <FormControl>
+                  <Textarea placeholder="Descreva quando usar este checklist..." {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+           <FormField
+            control={form.control}
+            name="sectorId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Setor</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um setor" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {sectors.map((sector) => (
+                      <SelectItem key={sector.id} value={sector.id}>
+                        {sector.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <div>
+            <h3 className="text-lg font-medium mb-2">Tarefas</h3>
+            <div className="space-y-2">
+              {fields.map((field, index) => (
+                <FormField
+                  key={field.id}
+                  control={form.control}
+                  name={`tasks.${index}.text`}
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className="flex items-center gap-2">
+                        <FormControl>
+                          <Input placeholder={`Tarefa ${index + 1}`} {...field} />
+                        </FormControl>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="icon"
+                          onClick={() => remove(index)}
+                          disabled={fields.length <= 1}
+                        >
+                          <Trash className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              ))}
+            </div>
+             <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              onClick={() => append({ id: uuidv4(), text: "" })}
+            >
+              Adicionar Tarefa
+            </Button>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button type="button" variant="ghost" onClick={onFinished}>Cancelar</Button>
+            <Button type="submit">Salvar Checklist</Button>
+        </div>
+      </form>
+    </Form>
+  );
+}

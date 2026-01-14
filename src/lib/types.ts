@@ -1,5 +1,3 @@
-
-
 export type Role = 'admin' | 'gerente' | 'encarregado' | 'tecnico' | 'vendedor';
 export type UserStatus = 'active' | 'inactive' | 'pending_invitation';
 
@@ -17,6 +15,7 @@ export interface ModulePermissions {
   technicians: PermissionLevel;
   location: PermissionLevel;
   monitoring: PermissionLevel;
+  checklists: PermissionLevel;
 }
 
 export type MobileNavPreferences = {
@@ -148,6 +147,13 @@ export interface TechnicalReport {
     signature?: string; // Data URL of the signature image
 }
 
+export interface ChecklistTaskState {
+    taskId: string;
+    completed: boolean;
+    photo?: string; // URL da foto de evidência
+    observation?: string;
+}
+
 export interface ExternalTicket {
   id: string;
   client: {
@@ -181,6 +187,8 @@ export interface ExternalTicket {
   enRouteAt?: string | null;
   comments?: Comment[];
   technicalReport?: TechnicalReport | null;
+  checklistId?: string;
+  checklist?: ChecklistTaskState[];
 }
 
 export interface InternalTicket {
@@ -245,4 +253,20 @@ export interface PreventiveRoutePlan {
     }[];
   }[];
   summary: string;
+}
+
+export interface ChecklistTask {
+  id: string;
+  text: string;
+}
+
+export interface Checklist {
+  id: string;
+  name: string;
+  description?: string;
+  sectorId: string;
+  tasks: ChecklistTask[];
+  status: 'active' | 'archived';
+  createdAt: string;
+  updatedAt: string;
 }
