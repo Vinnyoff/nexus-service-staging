@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { CalendarIcon, ArrowLeft, ArrowRight, Loader2, List, Check, Search, ChevronsUpDown, AlertTriangle } from "lucide-react";
+import { CalendarIcon, ArrowLeft, ArrowRight, Loader2, List, Check, Search, ChevronsUpDown, AlertTriangle, ListChecks } from "lucide-react";
 import { format, addHours } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { ptBR } from "date-fns/locale";
@@ -36,7 +36,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import React from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useDebounce } from "@/hooks/use-debounce";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsMobile } from "@/hooks/use-is-mobile";
 
 const formSchema = z.object({
   clientId: z.string().optional(),
@@ -270,7 +270,7 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
 
     function handlePreviousStep() {
         if (currentStep > 1) {
-            setCurrentStep(currentStep - 1);
+            setCurrentStep(currentStep + 1);
         }
     }
 
@@ -784,31 +784,35 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                             )}
                         />
                     </div>
-                    <FormField
-                        control={form.control}
-                        name="checklistId"
-                        render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Checklist (Opcional)</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value} disabled={!selectedSectorId}>
-                            <FormControl>
-                                <SelectTrigger>
-                                <SelectValue placeholder={!selectedSectorId ? "Selecione um setor primeiro" : "Selecione um checklist"} />
-                                </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                                {filteredChecklists.map((checklist) => (
-                                <SelectItem key={checklist.id} value={checklist.id}>
-                                    {checklist.name}
-                                </SelectItem>
-                                ))}
-                            </SelectContent>
-                            </Select>
-                            <FormMessage />
-                        </FormItem>
-                        )}
-                    />
-                    <Separator className="my-4"/>
+                     <div className="space-y-4 rounded-lg border border-blue-500/50 bg-blue-500/10 p-4">
+                        <h4 className="text-md font-semibold text-blue-800 dark:text-blue-300 flex items-center">
+                            <ListChecks className="h-5 w-5 mr-2"/>
+                            Checklist (Opcional)
+                        </h4>
+                        <FormField
+                            control={form.control}
+                            name="checklistId"
+                            render={({ field }) => (
+                            <FormItem>
+                                <Select onValueChange={field.onChange} value={field.value} disabled={!selectedSectorId}>
+                                <FormControl>
+                                    <SelectTrigger className="bg-background/50">
+                                    <SelectValue placeholder={!selectedSectorId ? "Selecione um setor primeiro" : "Selecione um checklist"} />
+                                    </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                    {filteredChecklists.map((checklist) => (
+                                    <SelectItem key={checklist.id} value={checklist.id}>
+                                        {checklist.name}
+                                    </SelectItem>
+                                    ))}
+                                </SelectContent>
+                                </Select>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
+                     </div>
                      <div className="space-y-4 rounded-lg border border-amber-500/50 bg-amber-500/10 p-4">
                         <h4 className="text-md font-semibold text-amber-800 dark:text-amber-300 flex items-center">
                             <AlertTriangle className="h-5 w-5 mr-2"/>
