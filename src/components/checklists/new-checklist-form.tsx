@@ -16,8 +16,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Sector } from "@/lib/types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import { Trash } from "lucide-react";
+import { Trash, Loader2 } from "lucide-react";
 import { v4 as uuidv4 } from 'uuid';
+import { useState } from "react";
 
 const taskSchema = z.object({
   id: z.string(),
@@ -34,12 +35,14 @@ const formSchema = z.object({
 export type NewChecklistFormValues = z.infer<typeof formSchema>;
 
 interface NewChecklistFormProps {
-  onSave: (values: NewChecklistFormValues) => void;
+  onSave: (values: NewChecklistFormValues) => Promise<void>;
   onFinished: () => void;
   sectors: Sector[];
 }
 
 export function NewChecklistForm({ onSave, onFinished, sectors }: NewChecklistFormProps) {
+  const [isSaving, setIsSaving] = useState(false);
+
   const form = useForm<NewChecklistFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -55,8 +58,14 @@ export function NewChecklistForm({ onSave, onFinished, sectors }: NewChecklistFo
     name: "tasks",
   });
 
-  function onSubmit(values: NewChecklistFormValues) {
-    onSave(values);
+  async function onSubmit(values: NewChecklistFormValues) {
+    setIsSaving(true);
+    try {
+      await onSave(values);
+    } catch (error) {
+      // Error is handled in the parent, but we need to re-enable the button
+      setIsSaving(false);
+    }
   }
 
   return (
@@ -155,8 +164,11 @@ export function NewChecklistForm({ onSave, onFinished, sectors }: NewChecklistFo
           </div>
         </div>
         <div className="flex justify-end gap-2 pt-4 border-t">
-            <Button type="button" variant="ghost" onClick={onFinished}>Cancelar</Button>
-            <Button type="submit">Salvar Checklist</Button>
+            <Button type="button" variant="ghost" onClick={onFinished} disabled={isSaving}>Cancelar</Button>
+            <Button type="submit" disabled={isSaving}>
+                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isSaving ? "Salvando..." : "Salvar Checklist"}
+            </Button>
         </div>
       </form>
     </Form>

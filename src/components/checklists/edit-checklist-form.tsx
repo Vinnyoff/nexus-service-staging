@@ -66,8 +66,11 @@ export function EditChecklistForm({ checklist, sectors, onSave, onFinished }: Ed
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSaving(true);
     const { status, ...otherValues } = values;
-    await onSave(checklist.id, otherValues, status);
-    setIsSaving(false);
+    const success = await onSave(checklist.id, otherValues, status);
+    // Only set saving to false if it failed, otherwise the dialog closes
+    if (!success) {
+      setIsSaving(false);
+    }
   }
 
   return (
@@ -187,7 +190,7 @@ export function EditChecklistForm({ checklist, sectors, onSave, onFinished }: Ed
             <Button type="button" variant="ghost" onClick={onFinished} disabled={isSaving}>Cancelar</Button>
             <Button type="submit" disabled={isSaving}>
                 {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Salvar Alterações
+                {isSaving ? "Salvando..." : "Salvar Alterações"}
             </Button>
         </div>
       </form>

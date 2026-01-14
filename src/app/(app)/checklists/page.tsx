@@ -74,6 +74,8 @@ export default function ChecklistsPage() {
     } catch (error) {
       console.error("Error adding checklist: ", error);
       toast({ variant: 'destructive', title: "Erro ao adicionar checklist" });
+      // Re-throw to allow the form to handle the saving state
+      throw error;
     }
   };
 
