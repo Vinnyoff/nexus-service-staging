@@ -4,7 +4,7 @@ import type { ExternalTicket, User, Technician, Sector, Checklist, ChecklistTask
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Calendar, User as UserIcon, Phone, MapPin, AlertCircle, ExternalLink, MessageSquare, Hand, CheckCircle, MapPinned, Undo, History, Camera, Loader2, Edit, Info, Pencil, ListChecks } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '../ui/badge';
@@ -22,6 +22,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { SignaturePad } from '../shared/signature-pad';
 import { optimizeImage, optimizeSignature } from '@/lib/image-optimizer';
 import { useDebounce } from '@/hooks/use-debounce';
+import { Checkbox } from '../ui/checkbox';
 
 
 interface ChecklistItemProps {
