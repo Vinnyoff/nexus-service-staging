@@ -425,12 +425,36 @@ export default function ExternalTicketsPage() {
     }
   };
   
-  const handleCancelTicket = async (id: string) => {
-    await handleStatusChange(id, 'cancelado');
-    toast({
-      title: 'Chamado Cancelado',
-      description: `O chamado #${id.substring(0,4)} foi cancelado.`,
-    });
+  const handleCancelTicket = async (id: string, reason: string) => {
+    if (!user) return;
+    const ticketRef = doc(db, "external-tickets", id);
+    try {
+        const comment: Comment = {
+            id: `comment-${Date.now()}`,
+            authorId: user.id,
+            content: `**Chamado Cancelado:** ${reason}`,
+            createdAt: new Date().toISOString(),
+        };
+
+        await updateDoc(ticketRef, {
+            status: 'cancelado',
+            updatedAt: new Date().toISOString(),
+            comments: arrayUnion(comment),
+        });
+
+        toast({
+            title: 'Chamado Cancelado',
+            description: `O chamado #${id.substring(0,4)} foi cancelado.`,
+        });
+
+    } catch (error) {
+        console.error("Error cancelling ticket: ", error);
+        toast({
+            variant: "destructive",
+            title: "Erro ao cancelar chamado",
+            description: "Não foi possível atualizar o chamado. Tente novamente.",
+        });
+    }
   };
 
   const handleConfirmAction = (action: 'reopen' | 'cancel' | 'take', ticket: ExternalTicket) => {
@@ -442,14 +466,16 @@ export default function ExternalTicketsPage() {
 
     const { ticket, action, reason } = confirmation;
 
-    if (action === 'reopen') {
+    if (action === 'reopen' || action === 'cancel') {
         if (!reason) {
             toast({ variant: 'destructive', title: 'Justificativa obrigatória' });
             return;
         }
-        await handleReopenTicket(ticket.id, reason);
-    } else if (action === 'cancel') {
-        await handleCancelTicket(ticket.id);
+        if (action === 'reopen') {
+            await handleReopenTicket(ticket.id, reason);
+        } else {
+            await handleCancelTicket(ticket.id, reason);
+        }
     } else if (action === 'take') {
         await handleAssignTicket(ticket.id);
     }
@@ -480,8 +506,17 @@ export default function ExternalTicketsPage() {
         <>
             <AlertDialogTitle>Confirmar Cancelamento</AlertDialogTitle>
             <AlertDialogDescription>
-                Você tem certeza que deseja cancelar este chamado?
+                Informe o motivo do cancelamento. Essa informação será salva nos comentários do chamado.
             </AlertDialogDescription>
+            <div className="py-4">
+                <Label htmlFor="cancel-reason">Justificativa</Label>
+                <Textarea 
+                    id="cancel-reason"
+                    placeholder="Ex: Cliente solicitou o cancelamento..."
+                    value={confirmation.reason}
+                    onChange={(e) => setConfirmation(c => ({ ...c, reason: e.target.value }))}
+                />
+            </div>
         </>
       );
        case 'take': return (
@@ -699,7 +734,7 @@ export default function ExternalTicketsPage() {
             </AlertDialogHeader>
             <AlertDialogFooter>
                 <AlertDialogCancel>Voltar</AlertDialogCancel>
-                <AlertDialogAction onClick={executeConfirmedAction} disabled={confirmation.action === 'reopen' && !confirmation.reason}>Confirmar</AlertDialogAction>
+                <AlertDialogAction onClick={executeConfirmedAction} disabled={(confirmation.action === 'reopen' || confirmation.action === 'cancel') && !confirmation.reason}>Confirmar</AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -707,4 +742,3 @@ export default function ExternalTicketsPage() {
     </>
   );
 }
-
