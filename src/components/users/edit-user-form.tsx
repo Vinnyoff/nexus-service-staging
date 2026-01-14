@@ -45,6 +45,7 @@ const permissionsFormSchema = z.object({
   clients: permissionSchema,
   technicians: permissionSchema,
   monitoring: permissionSchema,
+  checklists: permissionSchema,
 });
 
 type PermissionsFormValues = z.infer<typeof permissionsFormSchema>;
@@ -61,6 +62,7 @@ const moduleLabels: Record<keyof ModulePermissions, string> = {
     clients: "Clientes",
     technicians: "Técnicos",
     monitoring: "Monitoramento",
+    checklists: "Checklists",
 };
 
 const defaultEncarregadoPermissions: PermissionsFormValues = {
@@ -75,6 +77,7 @@ const defaultEncarregadoPermissions: PermissionsFormValues = {
     clients: 'read',
     technicians: 'read',
     monitoring: 'none',
+    checklists: 'read',
 };
 
 const defaultGerentePermissions: PermissionsFormValues = {
@@ -89,6 +92,7 @@ const defaultGerentePermissions: PermissionsFormValues = {
     clients: 'write',
     technicians: 'write',
     monitoring: 'write',
+    checklists: 'write',
 };
 
 interface PermissionsSubFormProps {
@@ -103,7 +107,8 @@ function UserPermissionsSubForm({ form, userRole }: PermissionsSubFormProps) {
              <h3 className="text-lg font-medium border-b pb-2 pt-4">Permissões do Módulo</h3>
             {Object.keys(moduleLabels).map((moduleKey) => {
                 const key = moduleKey as keyof ModulePermissions;
-                if (userRole === 'encarregado' && (key === 'reports' || key === 'technicians' || key === 'monitoring')) {
+                // Oculta módulos não relevantes para encarregado para simplificar a UI
+                if (userRole === 'encarregado' && ['monitoring'].includes(key)) {
                     return null;
                 }
                 return (
