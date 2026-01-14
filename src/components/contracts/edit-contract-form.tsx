@@ -53,7 +53,7 @@ export function EditContractForm({ contract, sectors, checklists, onSave, onFini
         description: contract.description || "",
         frequencyDays: contract.frequencyDays,
         sectorIds: contract.sectorIds,
-        defaultChecklistId: contract.defaultChecklistId || "",
+        defaultChecklistId: contract.defaultChecklistId || "_none_",
         status: contract.status,
     },
   });
@@ -68,7 +68,12 @@ export function EditContractForm({ contract, sectors, checklists, onSave, onFini
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSaving(true);
-    const { status, ...otherValues } = values;
+    // Treat the special value as an empty string before saving
+    const valuesToSave = {
+      ...values,
+      defaultChecklistId: values.defaultChecklistId === '_none_' ? '' : values.defaultChecklistId
+    }
+    const { status, ...otherValues } = valuesToSave;
     await onSave(contract.id, otherValues, status);
     setIsSaving(false);
   }
@@ -180,7 +185,7 @@ export function EditContractForm({ contract, sectors, checklists, onSave, onFini
                                 </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                                 <SelectItem value="">Nenhum</SelectItem>
+                                 <SelectItem value="_none_">Nenhum</SelectItem>
                                 {availableChecklists.map((checklist) => (
                                 <SelectItem key={checklist.id} value={checklist.id}>
                                     {checklist.name}
