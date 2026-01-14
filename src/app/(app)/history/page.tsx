@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -6,7 +7,7 @@ import { PageHeader } from '@/components/page-header';
 import { HistoryFilterBar, HistoryFilters } from '@/components/history/history-filter-bar';
 import { HistoryTable } from '@/components/history/history-table';
 import { useAuth } from '@/hooks/use-auth';
-import type { ExternalTicket, Sector, Technician, User, RouteHistoryEntry } from '@/lib/types';
+import type { ExternalTicket, Sector, User, RouteHistoryEntry } from '@/lib/types';
 import { isWithinInterval, startOfDay, endOfDay, format, parseISO } from 'date-fns';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '@/firebase/config';
@@ -23,7 +24,6 @@ export default function HistoryPage() {
     technicianId: 'all',
   });
   const [tickets, setTickets] = useState<ExternalTicket[]>([]);
-  const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,9 +44,6 @@ export default function HistoryPage() {
         setTickets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ExternalTicket)));
         setLoading(false);
       }),
-      onSnapshot(collection(db, "technicians"), snapshot => {
-        setTechnicians(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Technician)));
-      }),
       onSnapshot(collection(db, "sectors"), snapshot => {
         setSectors(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sector)));
       }),
@@ -61,7 +58,7 @@ export default function HistoryPage() {
   const filteredTickets = useMemo(() => {
     let data: ExternalTicket[] = tickets;
 
-    if (user?.role === 'tecnico') {
+    if (user?.role === 'tecnico' || user?.role === 'encarregado') {
         data = data.filter((ticket) => ticket.technicianId === user.id);
     } else if (filters.technicianId && filters.technicianId !== 'all') {
       data = data.filter(
@@ -88,17 +85,17 @@ export default function HistoryPage() {
   }, [filters, user, tickets]);
 
   const filteredRouteHistory = useMemo(() => {
-    let techsToFilter = technicians;
-    if (user?.role === 'tecnico') {
-      techsToFilter = techsToFilter.filter(tech => tech.id === user.id);
+    let usersToFilter = users.filter(u => u.role === 'tecnico' || u.role === 'encarregado');
+    if (user?.role === 'tecnico' || user?.role === 'encarregado') {
+      usersToFilter = usersToFilter.filter(u => u.id === user.id);
     } else if (filters.technicianId && filters.technicianId !== 'all') {
-      techsToFilter = techsToFilter.filter(tech => tech.id === filters.technicianId);
+      usersToFilter = usersToFilter.filter(u => u.id === filters.technicianId);
     }
 
     const history: (RouteHistoryEntry & { technicianName: string, technicianId: string })[] = [];
-    techsToFilter.forEach(tech => {
-      if (tech.routeHistory) {
-        tech.routeHistory.forEach(entry => {
+    usersToFilter.forEach(u => {
+      if (u.routeHistory) {
+        u.routeHistory.forEach(entry => {
           const entryDate = parseISO(entry.date);
           let include = true;
           if (filters.startDate && entryDate < startOfDay(filters.startDate)) {
@@ -108,14 +105,14 @@ export default function HistoryPage() {
             include = false;
           }
           if (include) {
-            history.push({ ...entry, technicianName: tech.name, technicianId: tech.id });
+            history.push({ ...entry, technicianName: u.name, technicianId: u.id });
           }
         });
       }
     });
     
     return history.sort((a,b) => parseISO(b.date).getTime() - parseISO(a.date).getTime());
-  }, [filters, user, technicians]);
+  }, [filters, user, users]);
   
 
   return (
@@ -129,7 +126,6 @@ export default function HistoryPage() {
         <HistoryFilterBar 
           filters={filters} 
           onFilterChange={setFilters}
-          allTechnicians={technicians}
           allUsers={users}
         />
         {loading ? (
@@ -146,7 +142,6 @@ export default function HistoryPage() {
               <HistoryTable 
                 data={filteredTickets} 
                 sectors={sectors} 
-                technicians={technicians} 
                 users={users}
                 columnVisibility={columnVisibility}
                 onColumnVisibilityChange={setColumnVisibility}

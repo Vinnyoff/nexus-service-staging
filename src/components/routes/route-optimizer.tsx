@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -7,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Map, Loader2, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
-import type { ExternalTicket, OptimizedRoute, Technician, RouteHistoryEntry } from '@/lib/types';
+import type { ExternalTicket, OptimizedRoute, User, RouteHistoryEntry } from '@/lib/types';
 import { optimizeTechnicianRoutes } from '@/ai/flows/optimize-technician-routes';
 import { OptimizedRouteList } from './optimized-route-list';
 import { doc, updateDoc, getDoc, arrayUnion } from 'firebase/firestore';
@@ -136,10 +137,10 @@ export function RouteOptimizer({ tickets }: RouteOptimizerProps) {
 
     setIsSaving(true);
     const routeOrder = optimizedRoute.tickets.map(ticket => ticket.id);
-    const technicianRef = doc(db, 'technicians', user.id);
+    const userRef = doc(db, 'users', user.id);
 
     try {
-        await updateDoc(technicianRef, {
+        await updateDoc(userRef, {
             routeOrder: routeOrder,
         });
         toast({
@@ -162,13 +163,13 @@ export function RouteOptimizer({ tickets }: RouteOptimizerProps) {
   const handleClearRoute = async () => {
     if (!user) return;
     setIsClearing(true);
-    const technicianRef = doc(db, 'technicians', user.id);
+    const userRef = doc(db, 'users', user.id);
     
     try {
-        const techDoc = await getDoc(technicianRef);
-        if (techDoc.exists()) {
-            const techData = techDoc.data() as Technician;
-            const currentRouteOrder = techData.routeOrder;
+        const userDoc = await getDoc(userRef);
+        if (userDoc.exists()) {
+            const userData = userDoc.data() as User;
+            const currentRouteOrder = userData.routeOrder;
 
             // Archive the route before clearing it
             if (currentRouteOrder && currentRouteOrder.length > 0) {
@@ -178,13 +179,13 @@ export function RouteOptimizer({ tickets }: RouteOptimizerProps) {
                     finishedAt: new Date().toISOString(),
                 };
                 
-                await updateDoc(technicianRef, {
+                await updateDoc(userRef, {
                     routeHistory: arrayUnion(historyEntry),
                     routeOrder: [], // Clear the current route
                 });
             } else {
                  // If there's no current route, just ensure it's cleared.
-                await updateDoc(technicianRef, {
+                await updateDoc(userRef, {
                     routeOrder: [],
                 });
             }

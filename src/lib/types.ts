@@ -1,4 +1,5 @@
 
+
 export type Role = 'admin' | 'gerente' | 'encarregado' | 'tecnico' | 'vendedor';
 export type UserStatus = 'active' | 'inactive' | 'pending_invitation';
 
@@ -40,6 +41,11 @@ export interface PushSubscription {
   };
 }
 
+export interface RouteHistoryEntry {
+  date: string; // YYYY-MM-DD
+  routeOrder: string[];
+  finishedAt?: string;
+}
 
 export interface User {
   id: string;
@@ -57,6 +63,8 @@ export interface User {
   euroInfoId?: string;
   rondoInfoId?: string;
   pushSubscriptions?: PushSubscription[];
+  routeOrder?: string[];
+  routeHistory?: RouteHistoryEntry[];
 }
 
 export interface Sector {
@@ -68,12 +76,6 @@ export interface Sector {
   whatsappGroupId?: string;
   euroInfoId?: string;
   rondoInfoId?: string;
-}
-
-export interface RouteHistoryEntry {
-  date: string; // YYYY-MM-DD
-  routeOrder: string[];
-  finishedAt?: string;
 }
 
 export interface Technician {

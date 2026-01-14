@@ -1,10 +1,11 @@
 
+
 'use client';
 
 import { PageHeader } from "@/components/page-header";
 import { TechnicianRouteCard } from "@/components/location/technician-route-card";
 import { db } from "@/firebase/config";
-import { ExternalTicket, Sector, Technician, User } from "@/lib/types";
+import { ExternalTicket, Sector, User } from "@/lib/types";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { Loader2 } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
@@ -14,9 +15,8 @@ import { isToday, parseISO } from "date-fns";
 
 export default function LocationPage() {
   const [allTickets, setAllTickets] = useState<ExternalTicket[]>([]);
-  const [allTechnicians, setAllTechnicians] = useState<Technician[]>([]);
-  const [allSectors, setAllSectors] = useState<Sector[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [allSectors, setAllSectors] = useState<Sector[]>([]);
   const [sectorFilter, setSectorFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
@@ -29,74 +29,70 @@ export default function LocationPage() {
         onSnapshot(ticketsQuery, snapshot => {
             setAllTickets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ExternalTicket)));
         }, () => setAllTickets([])),
-        onSnapshot(collection(db, "technicians"), snapshot => {
-            setAllTechnicians(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Technician)));
-        }, () => setAllTechnicians([])),
         onSnapshot(collection(db, "users"), snapshot => {
             setAllUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
         }, () => setAllUsers([])),
         onSnapshot(collection(db, 'sectors'), snapshot => {
             setAllSectors(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sector)));
-        }, () => setAllSectors([])),
+            setLoading(false); // Set loading to false after sectors are fetched as it's the last one
+        }, () => {
+            setAllSectors([]);
+            setLoading(false);
+        }),
     ];
 
     // Failsafe to turn off loading
-    const timer = setTimeout(() => setLoading(false), 3000);
+    const timer = setTimeout(() => {
+        if(loading) setLoading(false)
+    }, 3000);
 
     return () => {
         unsubscribes.forEach(unsub => unsub())
         clearTimeout(timer);
     };
-  }, []);
+  }, [loading]);
 
   const techniciansOnRoute = useMemo(() => {
     if (!user) return [];
   
-    // 1. Filter technicians based on user role
-    let visibleTechnicians: Technician[];
+    let visibleUsers: User[];
     if (user.role === 'admin' || user.role === 'gerente') {
-      visibleTechnicians = allTechnicians;
+      visibleUsers = allUsers.filter(u => u.role === 'tecnico' || u.role === 'encarregado');
     } else if (user.role === 'encarregado' && user.sectorIds) {
-      visibleTechnicians = allTechnicians.filter(tech =>
-        tech.sectorIds?.some(sectorId => user.sectorIds?.includes(sectorId))
+      visibleUsers = allUsers.filter(u =>
+        (u.role === 'tecnico' || u.role === 'encarregado') && u.sectorIds?.some(sectorId => user.sectorIds!.includes(sectorId))
       );
     } else {
-      visibleTechnicians = allTechnicians.filter(tech => tech.id === user.id);
+      visibleUsers = allUsers.filter(u => u.id === user.id);
     }
   
-    // 2. Apply sector filter if selected
     if (sectorFilter !== 'all') {
-      visibleTechnicians = visibleTechnicians.filter(tech =>
-        tech.sectorIds?.includes(sectorFilter)
+      visibleUsers = visibleUsers.filter(u =>
+        u.sectorIds?.includes(sectorFilter)
       );
     }
   
-    // 3. From the visible list, find who is actually on a route
-    const techniciansWithTicketsInProgress = visibleTechnicians.filter(tech =>
+    const usersWithTicketsInProgress = visibleUsers.filter(u =>
       allTickets.some(ticket => {
-        const isTechTicket = ticket.technicianId === tech.id;
+        const isUserTicket = ticket.technicianId === u.id;
         const isActive = ticket.status === 'em andamento';
-        // Only consider tickets completed today for today's route view
         const isCompletedToday = ticket.status === 'concluído' && ticket.updatedAt && isToday(parseISO(ticket.updatedAt));
-        return isTechTicket && (isActive || isCompletedToday);
+        return isUserTicket && (isActive || isCompletedToday);
       })
     );
     
-    // 4. Map the final list to the card props
-    return techniciansWithTicketsInProgress.map(tech => {
-      const techUser = allUsers.find(u => u.id === tech.userId);
-      
-      const allTechTickets = allTickets.filter(t => {
-        if (t.technicianId !== tech.id) return false;
+    return usersWithTicketsInProgress.map(u => {
+      const allUserTickets = allTickets.filter(t => {
+        if (t.technicianId !== u.id) return false;
         if (t.status === 'em andamento') return true;
         if (t.status === 'concluído' && t.updatedAt && isToday(parseISO(t.updatedAt))) return true;
         return false;
       });
       
-      const routeOrder = tech.routeOrder || [];
-      const enRouteTicket = allTechTickets.find(t => t.enRoute);
+      const routeOrder = u.routeOrder || [];
+      const enRouteTicket = allUserTickets.find(t => t.enRoute);
 
-      let ticketsOnRoute = allTechTickets.filter(t => 
+      let ticketsOnRoute = allUserTickets.filter(t => 
         routeOrder.includes(t.id) ||
         t.enRoute ||
         (t.status === 'concluído' && (t.enRoute || routeOrder.includes(t.id)))
@@ -125,7 +121,7 @@ export default function LocationPage() {
           }
       }
       
-      let otherTickets = allTechTickets.filter(t => 
+      let otherTickets = allUserTickets.filter(t => 
         t.status === 'em andamento' && 
         !ticketsOnRoute.some(tr => tr.id === t.id)
       );
@@ -134,13 +130,13 @@ export default function LocationPage() {
       const offRouteTickets = otherTickets.filter(t => !!t.client.address);
 
       return {
-        technician: { ...tech, avatarUrl: techUser?.avatarUrl, name: techUser?.name || tech.name, email: techUser?.email || tech.email },
+        technician: u,
         ticketsWithAddress: ticketsOnRoute,
         ticketsWithoutAddress: ticketsWithoutAddress,
         offRouteTickets: offRouteTickets,
       };
     });
-  }, [allTickets, allTechnicians, allUsers, user, sectorFilter]);
+  }, [allTickets, allUsers, user, sectorFilter]);
 
   if (loading) {
     return (
@@ -186,5 +182,3 @@ export default function LocationPage() {
     </>
   );
 }
-
-    
