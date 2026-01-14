@@ -605,11 +605,14 @@ export function ExternalTicketDetails({
                                     <AlertDialogHeader>
                                     <AlertDialogTitle>Confirmar Finalização</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                        Você tem certeza que deseja finalizar este atendimento? Esta ação não pode ser desfeita (apenas reaberta como revisão).
+                                        {ticket.checklistId ? 
+                                            "Este chamado possui um checklist. Caso queira revisar, clique em Voltar. Se está pronto para concluir, clique em Confirmar." :
+                                            "Você tem certeza que deseja finalizar este atendimento? Esta ação não pode ser desfeita (apenas reaberta como revisão)."
+                                        }
                                     </AlertDialogDescription>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
-                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                        <AlertDialogCancel>Voltar</AlertDialogCancel>
                                         <AlertDialogAction onClick={handleFinalize}>Confirmar</AlertDialogAction>
                                     </AlertDialogFooter>
                                 </AlertDialogContent>
