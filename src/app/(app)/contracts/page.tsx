@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { PlusCircle, Loader2, RefreshCw } from "lucide-react";
@@ -62,6 +62,19 @@ export default function ContractsPage() {
         clearTimeout(timer);
     };
   }, []);
+
+  const filteredContracts = useMemo(() => {
+    if (!user) return [];
+    if (user.role === 'admin' || user.role === 'gerente') {
+      return contracts;
+    }
+    if (user.role === 'encarregado' && user.sectorIds) {
+      return contracts.filter(contract => 
+        contract.sectorIds.some(sectorId => user.sectorIds!.includes(sectorId))
+      );
+    }
+    return []; // Return empty for other roles like 'tecnico'
+  }, [contracts, user]);
 
   const handleAddContract = async (values: NewContractFormValues) => {
     if (!user) {
@@ -231,7 +244,7 @@ export default function ContractsPage() {
         </div>
       ) : (
         <ContractsTable 
-          data={contracts}
+          data={filteredContracts}
           sectors={sectors}
           checklists={checklists}
           onUpdateContract={handleUpdateContract}
