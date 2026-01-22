@@ -147,8 +147,12 @@ export default function ExternalTicketsPage() {
   // Persist status filter to session storage
   useEffect(() => {
     sessionStorage.setItem(STATUS_FILTER_STORAGE_KEY, statusFilter);
-    setCurrentPage(1); // Reset page when filter changes
   }, [statusFilter]);
+
+  // Reset page when any filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, technicianFilter, sectorFilter, contractOnly, myTicketsOnly, searchQuery]);
   
   // Persist view mode
   useEffect(() => {
@@ -619,8 +623,9 @@ export default function ExternalTicketsPage() {
     });
   }, [tickets, user, statusFilter, technicianFilter, sectorFilter, contractOnly, myTicketsOnly, searchQuery]);
   
+  const shouldPaginate = statusFilter === 'all' || !!searchQuery;
   const totalPages = Math.ceil(filteredAndSortedTickets.length / TICKETS_PER_PAGE);
-  const paginatedTickets = statusFilter === 'all' ? filteredAndSortedTickets.slice((currentPage - 1) * TICKETS_PER_PAGE, currentPage * TICKETS_PER_PAGE) : filteredAndSortedTickets;
+  const paginatedTickets = shouldPaginate ? filteredAndSortedTickets.slice((currentPage - 1) * TICKETS_PER_PAGE, currentPage * TICKETS_PER_PAGE) : filteredAndSortedTickets;
 
   const hasActiveRoute = tickets.some(t => t.technicianId === user?.id && t.enRoute);
 
@@ -725,7 +730,7 @@ export default function ExternalTicketsPage() {
             />
         )}
 
-        {statusFilter === 'all' && totalPages > 1 && (
+        {shouldPaginate && totalPages > 1 && (
             <div className="flex items-center justify-end space-x-2 py-4">
                  <div className="flex-1 text-sm text-muted-foreground">
                     Página {currentPage} de {totalPages}
