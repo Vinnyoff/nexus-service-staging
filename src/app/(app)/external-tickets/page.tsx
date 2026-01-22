@@ -570,9 +570,9 @@ export default function ExternalTicketsPage() {
       return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
     }
     
-    // Regra para 'Todos': mais antigos primeiro
+    // Regra para 'Todos': mais recentes primeiro
     if (statusFilter === 'all') {
-      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     }
     
     // Regra para 'Em Andamento' com rota definida
