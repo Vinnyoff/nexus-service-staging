@@ -96,7 +96,7 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
     const { user } = useAuth();
     const { toast } = useToast();
     const [currentStep, setCurrentStep] = useState(1);
-    const [addressMode, setAddressMode] = useState<'api' | 'manual' | 'none'>('none');
+    const [addressMode, setAddressMode] = useState<'api' | 'manual' | 'none'>('manual');
     const [sectors, setSectors] = useState<Sector[]>([]);
     const [users, setUsers] = useState<User[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
@@ -183,6 +183,20 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
 
     const isContract = form.watch("isContract");
     const selectedSectorId = form.watch("sectorId");
+    const clientNameValue = form.watch('clientName');
+    const selectedClientId = form.watch('clientId');
+
+    useEffect(() => {
+        // Se o usuário alterar manualmente o nome de um cliente previamente selecionado,
+        // desvincule o ID para evitar inconsistência de dados.
+        if (selectedClientId) {
+            const selectedClient = clients.find(c => c.id === selectedClientId);
+            if (selectedClient && selectedClient.name !== clientNameValue) {
+                form.setValue('clientId', undefined, { shouldDirty: true });
+                setAddressMode('manual');
+            }
+        }
+    }, [clientNameValue, selectedClientId, clients, form]);
     
     const assignableUsers = useMemo(() => {
         if (!selectedSectorId) return [];
@@ -219,7 +233,6 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                 setAddressMode('manual');
             }
         } else {
-            // Logic for when a client is deselected or not found
             form.reset({
                 ...form.getValues(),
                 clientId: undefined,
@@ -234,7 +247,7 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                 },
             });
             setSelectedClientSla(undefined);
-            setAddressMode('manual'); // Default to manual for a new entry
+            setAddressMode('manual');
         }
     }
 
@@ -628,9 +641,14 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                         value={addressMode}
                         className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 py-2"
                     >
-                        <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="api" id="api" />
-                            <label htmlFor="api">Usar endereço do cliente</label>
+                        <div className={cn(
+                            "flex items-center space-x-2",
+                            !selectedClientId && "text-muted-foreground cursor-not-allowed"
+                        )}>
+                            <RadioGroupItem value="api" id="api" disabled={!selectedClientId} />
+                            <label htmlFor="api" className={cn(!selectedClientId && "cursor-not-allowed")}>
+                                Usar endereço do cliente
+                            </label>
                         </div>
                         <div className="flex items-center space-x-2">
                             <RadioGroupItem value="manual" id="manual" />
