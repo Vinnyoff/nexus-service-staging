@@ -167,6 +167,7 @@ export default function SchedulePage() {
                 view={currentView}
                 onSelectEvent={onSelectEvent}
                 eventPropGetter={eventStyleGetter}
+                popup
             />
         </div>
         <Card className="lg:col-span-3 xl:col-span-1 h-auto xl:h-[75vh] flex flex-col">
