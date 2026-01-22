@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -67,7 +66,28 @@ export default function SchedulePage() {
   }, []);
   
   const events = useMemo(() => {
-    const externalEvents: CalendarEvent[] = externalTickets
+    if (!user) return [];
+
+    let visibleExternalTickets = externalTickets;
+    let visibleInternalTickets = internalTickets;
+
+    if (user.role === 'encarregado') {
+      visibleExternalTickets = externalTickets.filter(ticket => 
+        user.sectorIds?.includes(ticket.sectorId)
+      );
+      visibleInternalTickets = internalTickets.filter(ticket => 
+        ticket.sectorId && user.sectorIds?.includes(ticket.sectorId)
+      );
+    } else if (user.role === 'tecnico') {
+      visibleExternalTickets = externalTickets.filter(ticket =>
+        ticket.technicianId === user.id
+      );
+      visibleInternalTickets = internalTickets.filter(ticket =>
+        ticket.assigneeId === user.id
+      );
+    }
+
+    const externalEvents: CalendarEvent[] = visibleExternalTickets
       .filter(ticket => ticket.scheduledTo)
       .map(ticket => ({
         title: `${ticket.client.name}`,
@@ -77,7 +97,7 @@ export default function SchedulePage() {
         type: 'external'
       }));
       
-    const internalEvents: CalendarEvent[] = internalTickets
+    const internalEvents: CalendarEvent[] = visibleInternalTickets
         .filter(ticket => ticket.scheduledTo)
         .map(ticket => ({
             title: ticket.title,
@@ -88,7 +108,7 @@ export default function SchedulePage() {
         }));
 
     return [...externalEvents, ...internalEvents];
-  }, [externalTickets, internalTickets]);
+  }, [externalTickets, internalTickets, user]);
 
   const onNavigate = useCallback((newDate: Date) => setCurrentDate(newDate), [setCurrentDate])
   const onView = useCallback((newView: View) => setCurrentView(newView), [setCurrentView])
