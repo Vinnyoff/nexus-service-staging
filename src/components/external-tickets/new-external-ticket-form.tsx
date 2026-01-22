@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useForm } from "react-hook-form";
@@ -266,7 +265,7 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
 
     function handlePreviousStep() {
         if (currentStep > 1) {
-            setCurrentStep(currentStep + 1);
+            setCurrentStep(currentStep - 1);
         }
     }
 
@@ -977,4 +976,3 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
         </Form>
     );
 }
-
