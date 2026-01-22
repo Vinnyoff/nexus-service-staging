@@ -31,7 +31,7 @@ const formSchema = z.object({
   description: z.string().optional(),
   frequencyDays: z.coerce.number().positive({ message: "A frequência deve ser maior que zero." }),
   sectorIds: z.array(z.string()).min(1, { message: "Selecione pelo menos um setor." }),
-  defaultChecklists: z.record(z.string()).optional(),
+  defaultChecklists: z.record(z.string().optional()).optional(),
 });
 
 export type NewContractFormValues = z.infer<typeof formSchema>;
@@ -68,7 +68,7 @@ export function NewContractForm({ clients, sectors, checklists, onSave, onFinish
     if (values.defaultChecklists) {
         for (const sectorId of values.sectorIds) {
             if (values.defaultChecklists[sectorId] && values.defaultChecklists[sectorId] !== '_none_') {
-                finalChecklists[sectorId] = values.defaultChecklists[sectorId];
+                finalChecklists[sectorId] = values.defaultChecklists[sectorId]!;
             }
         }
     }
@@ -252,7 +252,7 @@ export function NewContractForm({ clients, sectors, checklists, onSave, onFinish
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>{sector.name}</FormLabel>
-                                        <Select onValueChange={field.onChange} value={field.value} disabled={availableChecklists.length === 0}>
+                                        <Select onValueChange={field.onChange} value={field.value || '_none_'} disabled={availableChecklists.length === 0}>
                                             <FormControl>
                                                 <SelectTrigger>
                                                 <SelectValue placeholder={availableChecklists.length === 0 ? "Nenhum checklist para este setor" : "Nenhum"} />
