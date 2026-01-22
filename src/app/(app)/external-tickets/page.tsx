@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Loader2, LayoutDashboard, List, RefreshCcw } from "lucide-react";
+import { PlusCircle, Loader2, LayoutDashboard, List, RefreshCcw, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { NewExternalTicketForm, NewExternalTicketFormValues } from "@/components/external-tickets/new-external-ticket-form";
 import { ExternalTicket, Sector, User, Technician, Comment, Checklist, ChecklistTaskState } from "@/lib/types";
@@ -23,6 +23,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { sendWhatsappMessage } from "@/lib/services/notification-service";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 
 type ConfirmationState = {
@@ -36,6 +37,7 @@ const STATUS_FILTER_STORAGE_KEY = 'external_tickets_status_filter';
 const VIEW_MODE_STORAGE_KEY = 'external_tickets_view_mode';
 
 type ViewMode = 'kanban' | 'list';
+const TICKETS_PER_PAGE = 20;
 
 export default function ExternalTicketsPage() {
   const [isNewTicketDialogOpen, setIsNewTicketDialogOpen] = useState(false);
@@ -56,6 +58,7 @@ export default function ExternalTicketsPage() {
   const [pullDistance, setPullDistance] = useState(0);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => {
     if (typeof window !== 'undefined') {
@@ -144,6 +147,7 @@ export default function ExternalTicketsPage() {
   // Persist status filter to session storage
   useEffect(() => {
     sessionStorage.setItem(STATUS_FILTER_STORAGE_KEY, statusFilter);
+    setCurrentPage(1); // Reset page when filter changes
   }, [statusFilter]);
   
   // Persist view mode
@@ -549,103 +553,75 @@ export default function ExternalTicketsPage() {
     }
   };
 
-  const filteredTickets = tickets.filter(ticket => {
-    // Role-based visibility pre-filter
-    if (user?.role === 'encarregado' || user?.role === 'tecnico') {
-        if (!user.sectorIds?.includes(ticket.sectorId)) return false;
-    }
-    
-    // Search Query Filter
-    const query = searchQuery.toLowerCase();
-    if (query && 
-        !ticket.client.name.toLowerCase().includes(query) &&
-        !ticket.description.toLowerCase().includes(query) &&
-        !(ticket.requesterName && ticket.requesterName.toLowerCase().includes(query))
-    ) {
-        return false;
-    }
-
-    // UI Filter
-    if (statusFilter !== 'all' && ticket.status !== statusFilter) {
-      return false;
-    }
-    if (technicianFilter !== 'all' && ticket.technicianId !== technicianFilter) {
-        return false;
-    }
-    if (sectorFilter !== 'all' && ticket.sectorId !== sectorFilter) {
-        return false;
-    }
-    if (contractOnly && ticket.type !== 'contrato') {
-      return false;
-    }
-    if (myTicketsOnly && user && ticket.technicianId !== user.id) {
-      return false;
-    }
-    return true;
-  }).sort((a, b) => {
-    // Regra para 'Concluído': mais recentes primeiro
-    if (statusFilter === 'concluído') {
-      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-    }
-    
-    // Regra para 'Todos': mais recentes primeiro
-    if (statusFilter === 'all') {
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    }
-    
-    // Regra para 'Em Andamento' com rota definida
-    if (statusFilter === 'em andamento' && user?.routeOrder && user.routeOrder.length > 0) {
-        const routeOrder = user.routeOrder;
-        const indexA = routeOrder.indexOf(a.id);
-        const indexB = routeOrder.indexOf(b.id);
-  
-        // Se ambos estiverem na rota, ordene pela rota
-        if (indexA !== -1 && indexB !== -1) {
-          return indexA - indexB;
+  const filteredAndSortedTickets = useMemo(() => {
+    const filtered = tickets.filter(ticket => {
+        if (user?.role === 'encarregado' || user?.role === 'tecnico') {
+            if (!user.sectorIds?.includes(ticket.sectorId)) return false;
         }
-        // Se apenas A estiver na rota, ele vem primeiro
-        if (indexA !== -1) return -1;
-        // Se apenas B estiver na rota, ele vem primeiro
-        if (indexB !== -1) return 1;
-        // Se nenhum estiver na rota, cai para a ordenação padrão abaixo
-    }
+        
+        const query = searchQuery.toLowerCase();
+        if (query && 
+            !ticket.client.name.toLowerCase().includes(query) &&
+            !ticket.description.toLowerCase().includes(query) &&
+            !(ticket.requesterName && ticket.requesterName.toLowerCase().includes(query))
+        ) {
+            return false;
+        }
 
-    // Ordenação padrão por prioridade (para Pendente, Em Andamento sem rota, etc.)
-    const priorityOrder = {
-      'agendado-atrasado': -1,
-      'agendado-hoje': 0,
-      'retorno': 1,
-      'contrato': 2,
-      'urgente': 3,
-      'padrão': 4,
-      'agendado-futuro': 5,
-    };
+        if (statusFilter !== 'all' && ticket.status !== statusFilter) {
+          return false;
+        }
+        if (technicianFilter !== 'all' && ticket.technicianId !== technicianFilter) {
+            return false;
+        }
+        if (sectorFilter !== 'all' && ticket.sectorId !== sectorFilter) {
+            return false;
+        }
+        if (contractOnly && ticket.type !== 'contrato') {
+          return false;
+        }
+        if (myTicketsOnly && user && ticket.technicianId !== user.id) {
+          return false;
+        }
+        return true;
+    });
 
-    const getPriority = (ticket: ExternalTicket) => {
-      if (ticket.type === 'agendado' && ticket.scheduledTo) {
-          const scheduledDate = parseISO(ticket.scheduledTo);
-          if (isPast(scheduledDate) && !isToday(scheduledDate)) {
-              return priorityOrder['agendado-atrasado'];
-          }
-          if (isToday(scheduledDate)) {
-              return priorityOrder['agendado-hoje'];
-          }
-          return priorityOrder['agendado-futuro'];
-      }
-      return priorityOrder[ticket.type as keyof typeof priorityOrder] ?? 99;
-    };
+    return filtered.sort((a, b) => {
+        if (statusFilter === 'concluído' || statusFilter === 'all') {
+            return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        }
 
-    const priorityA = getPriority(a);
-    const priorityB = getPriority(b);
+        if (statusFilter === 'em andamento' && user?.routeOrder && user.routeOrder.length > 0) {
+            const routeOrder = user.routeOrder;
+            const indexA = routeOrder.indexOf(a.id);
+            const indexB = routeOrder.indexOf(b.id);
+      
+            if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+            if (indexA !== -1) return -1;
+            if (indexB !== -1) return 1;
+        }
 
-    if (priorityA !== priorityB) {
-      return priorityA - priorityB;
-    }
-    
-    // Se a prioridade for a mesma, ordene por data de criação (mais antigos primeiro)
-    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-  });
+        const priorityOrder = { 'agendado-atrasado': -1, 'agendado-hoje': 0, 'retorno': 1, 'contrato': 2, 'urgente': 3, 'padrão': 4, 'agendado-futuro': 5 };
+        const getPriority = (ticket: ExternalTicket) => {
+            if (ticket.type === 'agendado' && ticket.scheduledTo) {
+                const scheduledDate = parseISO(ticket.scheduledTo);
+                if (isPast(scheduledDate) && !isToday(scheduledDate)) return priorityOrder['agendado-atrasado'];
+                if (isToday(scheduledDate)) return priorityOrder['agendado-hoje'];
+                return priorityOrder['agendado-futuro'];
+            }
+            return priorityOrder[ticket.type as keyof typeof priorityOrder] ?? 99;
+        };
+        const priorityA = getPriority(a);
+        const priorityB = getPriority(b);
+        if (priorityA !== priorityB) return priorityA - priorityB;
+        
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    });
+  }, [tickets, user, statusFilter, technicianFilter, sectorFilter, contractOnly, myTicketsOnly, searchQuery]);
   
+  const totalPages = Math.ceil(filteredAndSortedTickets.length / TICKETS_PER_PAGE);
+  const paginatedTickets = statusFilter === 'all' ? filteredAndSortedTickets.slice((currentPage - 1) * TICKETS_PER_PAGE, currentPage * TICKETS_PER_PAGE) : filteredAndSortedTickets;
+
   const hasActiveRoute = tickets.some(t => t.technicianId === user?.id && t.enRoute);
 
 
@@ -716,7 +692,7 @@ export default function ExternalTicketsPage() {
 
         {viewMode === 'kanban' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {filteredTickets.map(ticket => (
+                {paginatedTickets.map(ticket => (
                 <ExternalTicketCard 
                     key={ticket.id} 
                     ticket={ticket}
@@ -731,7 +707,7 @@ export default function ExternalTicketsPage() {
                     onStatusChange={handleStatusChange}
                 />
                 ))}
-                {filteredTickets.length === 0 && (
+                {paginatedTickets.length === 0 && (
                 <div className="col-span-full text-center text-muted-foreground py-10">
                     Nenhum chamado encontrado com os filtros selecionados.
                 </div>
@@ -739,7 +715,7 @@ export default function ExternalTicketsPage() {
             </div>
         ) : (
             <ExternalTicketsTable 
-              data={filteredTickets} 
+              data={paginatedTickets} 
               users={users} 
               sectors={sectors} 
               currentUser={user}
@@ -747,6 +723,48 @@ export default function ExternalTicketsPage() {
               onSetEnRoute={handleSetEnRoute}
               onViewDetails={handleViewDetails}
             />
+        )}
+
+        {statusFilter === 'all' && totalPages > 1 && (
+            <div className="flex items-center justify-end space-x-2 py-4">
+                 <div className="flex-1 text-sm text-muted-foreground">
+                    Página {currentPage} de {totalPages}
+                </div>
+                <Button
+                    variant="outline"
+                    className="hidden h-8 w-8 p-0 lg:flex"
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                >
+                    <ChevronsLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                >
+                    <ChevronLeft className="h-4 w-4" />
+                    Anterior
+                </Button>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                >
+                    Próximo
+                    <ChevronRight className="h-4 w-4" />
+                </Button>
+                 <Button
+                    variant="outline"
+                    className="hidden h-8 w-8 p-0 lg:flex"
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={currentPage === totalPages}
+                >
+                    <ChevronsRight className="h-4 w-4" />
+                </Button>
+            </div>
         )}
       </div>
 
@@ -787,3 +805,4 @@ export default function ExternalTicketsPage() {
     </>
   );
 }
+
