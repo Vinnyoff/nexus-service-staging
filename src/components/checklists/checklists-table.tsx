@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -42,36 +41,6 @@ import { EditChecklistForm, EditChecklistFormValues } from "./edit-checklist-for
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/hooks/use-auth"
-
-
-const ActionsCell = ({ row }: { row: any }) => {
-  const checklist = row.original as Checklist;
-  const { toast } = useToast();
-
-  const handleCopyId = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(checklist.id);
-    toast({ title: "ID do Checklist copiado!" });
-  }
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="h-8 w-8 p-0" onClick={(e) => e.stopPropagation()}>
-          <span className="sr-only">Abrir menu</span>
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-        <DropdownMenuLabel>Ações</DropdownMenuLabel>
-        <DropdownMenuItem onClick={handleCopyId}>
-            <Copy className="mr-2 h-4 w-4" />
-            Copiar ID
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
 
 interface ChecklistsTableProps {
     data: Checklist[];
@@ -138,11 +107,6 @@ export function ChecklistsTable({ data, sectors, onUpdateChecklist }: Checklists
           {row.getValue("status") === 'active' ? 'Ativo' : 'Arquivado'}
         </Badge>
       ),
-    },
-    {
-      id: "actions",
-      enableHiding: false,
-      cell: ({ row }) => <ActionsCell row={row} />,
     },
   ]
   
