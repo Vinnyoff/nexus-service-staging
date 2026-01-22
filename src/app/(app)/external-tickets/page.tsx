@@ -565,12 +565,34 @@ export default function ExternalTicketsPage() {
     }
     return true;
   }).sort((a, b) => {
-    // If filtering by 'concluído', sort by update date (most recent first)
+    // Regra para 'Concluído': mais recentes primeiro
     if (statusFilter === 'concluído') {
       return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
     }
-      
-    // Default priority-based sorting for other statuses
+    
+    // Regra para 'Todos': mais antigos primeiro
+    if (statusFilter === 'all') {
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    }
+    
+    // Regra para 'Em Andamento' com rota definida
+    if (statusFilter === 'em andamento' && user?.routeOrder && user.routeOrder.length > 0) {
+        const routeOrder = user.routeOrder;
+        const indexA = routeOrder.indexOf(a.id);
+        const indexB = routeOrder.indexOf(b.id);
+  
+        // Se ambos estiverem na rota, ordene pela rota
+        if (indexA !== -1 && indexB !== -1) {
+          return indexA - indexB;
+        }
+        // Se apenas A estiver na rota, ele vem primeiro
+        if (indexA !== -1) return -1;
+        // Se apenas B estiver na rota, ele vem primeiro
+        if (indexB !== -1) return 1;
+        // Se nenhum estiver na rota, cai para a ordenação padrão abaixo
+    }
+
+    // Ordenação padrão por prioridade (para Pendente, Em Andamento sem rota, etc.)
     const priorityOrder = {
       'agendado-atrasado': -1,
       'agendado-hoje': 0,
@@ -602,7 +624,7 @@ export default function ExternalTicketsPage() {
       return priorityA - priorityB;
     }
     
-    // If priorities are the same, sort by creation date (older first)
+    // Se a prioridade for a mesma, ordene por data de criação (mais antigos primeiro)
     return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
   });
   
