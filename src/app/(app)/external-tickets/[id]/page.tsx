@@ -187,12 +187,12 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
         await updateDoc(ticketRef, {
             status: 'concluído',
             updatedAt: finalizationTime,
+            finalizedBy: user.id,
             technicalReport: newTechnicalReport,
             checkOut: {
                 ticketId: id,
                 timestamp: finalizationTime,
             },
-            technicianId: ticket.technicianId || null
         });
         
         const sector = allSectors.find(s => s.id === ticket.sectorId);

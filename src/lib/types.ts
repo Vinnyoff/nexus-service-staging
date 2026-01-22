@@ -171,6 +171,7 @@ export interface ExternalTicket {
   sectorId: string;
   creatorId: string;
   technicianId?: string | null;
+  finalizedBy?: string;
   description: string;
   type: 'padrão' | 'contrato' | 'urgente' | 'agendado' | 'retorno';
   priority?: 'Normal' | 'Alta' | 'Extrema';

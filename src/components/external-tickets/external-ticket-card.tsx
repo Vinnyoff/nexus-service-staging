@@ -84,6 +84,7 @@ export function ExternalTicketCard({
 }: ExternalTicketCardProps) {
   const creator = users.find((u) => u.id === ticket.creatorId);
   const assignee = users.find((u) => u.id === ticket.technicianId);
+  const finalizer = users.find((u) => u.id === ticket.finalizedBy);
   const sector = sectors.find(s => s.id === ticket.sectorId);
   const isCurrentUserAssigned = currentUser?.id === ticket.technicianId;
   const hasComments = ticket.comments && ticket.comments.length > 0;
@@ -156,9 +157,10 @@ export function ExternalTicketCard({
 
   const renderTechnicianStatus = () => {
     const technicianName = assignee?.name.split(' ')[0] || 'Técnico';
+    const finalizerName = finalizer?.name.split(' ')[0] || technicianName;
     switch (ticket.status) {
         case 'concluído':
-            return `Finalizado por ${technicianName}`;
+            return `Finalizado por ${finalizerName}`;
         case 'em andamento':
             return `Em andamento por ${technicianName}`;
         case 'pendente':

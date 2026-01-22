@@ -152,6 +152,7 @@ export function ExternalTicketDetails({
 
   const creator = users.find((u) => u.id === ticket.creatorId);
   const assignee = users.find((u) => u.id === ticket.technicianId);
+  const finalizer = users.find((u) => u.id === ticket.finalizedBy);
   const isAssigned = !!ticket.technicianId;
   const isConcluded = ticket.status === 'concluído';
   const isPending = ticket.status === 'pendente';
@@ -237,19 +238,28 @@ export function ExternalTicketDetails({
 
 
   const renderAssigneeStatus = () => {
+    if (isConcluded) {
+        const finalizerName = finalizer?.name || assignee?.name || 'Sistema'; // Fallback logic
+        return (
+            <div className="flex items-center text-green-600 dark:text-green-400">
+                <CheckCircle className="mr-2 h-4 w-4" />
+                <span>Finalizado por: {finalizerName} em {format(parseISO(ticket.updatedAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</span>
+            </div>
+        );
+    }
     if (assignee) {
       return (
-        <>
+        <div className="flex items-center">
           <UserIcon className="mr-2 h-4 w-4" />
           <span>Atribuído a: {assignee.name}</span>
-        </>
+        </div>
       );
     }
     return (
-      <>
-        <AlertCircle className="mr-2 h-4 w-4 text-amber-500" />
-        <span className="text-amber-500">Aguardando atribuição</span>
-      </>
+      <div className="flex items-center text-amber-500">
+        <AlertCircle className="mr-2 h-4 w-4" />
+        <span>Aguardando atribuição</span>
+      </div>
     );
   };
 
