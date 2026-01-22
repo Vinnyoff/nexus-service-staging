@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -628,8 +628,8 @@ export default function ExternalTicketsPage() {
   if (loading) {
     return (
         <div className="flex h-[calc(100vh-200px)] flex-col items-center justify-center gap-4 text-center">
-            <Loader2 className="h-10 w-10 animate-spin text-primary" />
-            <div className="space-y-1">
+            <div className="space-y-4">
+                <div className="mx-auto h-24 w-48 animate-pulse rounded-md bg-muted" />
                 <h2 className="text-xl font-semibold">Carregando Chamados...</h2>
                 <p className="text-muted-foreground">Por favor, aguarde enquanto buscamos os dados.</p>
                 <p className="text-sm font-bold text-muted-foreground pt-2">Nexus Service</p>
