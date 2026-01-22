@@ -16,13 +16,6 @@ import {
 import { ArrowUpDown, MoreHorizontal, ChevronLeft, ChevronsLeft, ChevronsRight, ChevronRight, Copy } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import {
   Table,
@@ -41,35 +34,6 @@ import { EditContractForm, EditContractFormValues } from "./edit-contract-form"
 import { format } from "date-fns"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select"
 import { useToast } from "@/hooks/use-toast"
-
-const ActionsCell = ({ row }: { row: any }) => {
-  const contract = row.original as ServiceContract
-  const { toast } = useToast();
-
-  const handleCopyId = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(contract.id);
-    toast({ title: "ID do Contrato copiado!" });
-  }
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="h-8 w-8 p-0" onClick={(e) => e.stopPropagation()}>
-          <span className="sr-only">Abrir menu</span>
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-        <DropdownMenuLabel>Ações</DropdownMenuLabel>
-        <DropdownMenuItem onClick={handleCopyId}>
-            <Copy className="mr-2 h-4 w-4" />
-            Copiar ID
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
 
 interface ContractsTableProps {
     data: ServiceContract[];
@@ -147,11 +111,6 @@ export function ContractsTable({ data, sectors, checklists, onUpdateContract }: 
       accessorKey: "createdAt",
       header: "Criado em",
       cell: ({ row }) => <div>{format(new Date(row.getValue("createdAt")), "dd/MM/yyyy")}</div>,
-    },
-    {
-      id: "actions",
-      enableHiding: false,
-      cell: ({ row }) => <ActionsCell row={row} />,
     },
   ], [sectors]);
 

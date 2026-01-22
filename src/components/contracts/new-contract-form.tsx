@@ -64,7 +64,17 @@ export function NewContractForm({ clients, sectors, checklists, onSave, onFinish
 
   async function onSubmit(values: NewContractFormValues) {
     setIsSaving(true);
-    await onSave(values);
+    const finalChecklists: Record<string, string> = {};
+    if (values.defaultChecklists) {
+        for (const sectorId of values.sectorIds) {
+            if (values.defaultChecklists[sectorId] && values.defaultChecklists[sectorId] !== '_none_') {
+                finalChecklists[sectorId] = values.defaultChecklists[sectorId];
+            }
+        }
+    }
+    
+    const valuesToSave = { ...values, defaultChecklists: finalChecklists };
+    await onSave(valuesToSave);
     setIsSaving(false);
   }
 
