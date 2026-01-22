@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -11,7 +12,7 @@ import { Calendar, momentLocalizer, Views, NavigateAction, View } from 'react-bi
 import moment from 'moment';
 import 'moment/locale/pt-br';
 import '../../calendar.css';
-import { addDays, parseISO } from 'date-fns';
+import { addDays, parseISO, startOfDay } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
@@ -135,7 +136,12 @@ export default function SchedulePage() {
                 [0];
             
             const baseDate = lastTicket ? parseISO(lastTicket.updatedAt) : parseISO(contract.createdAt);
-            const nextDueDate = addDays(baseDate, contract.frequencyDays);
+            let nextDueDate = addDays(baseDate, contract.frequencyDays);
+
+            const today = startOfDay(new Date());
+            while (nextDueDate < today) {
+                nextDueDate = addDays(nextDueDate, contract.frequencyDays);
+            }
 
             projectedEvents.push({
                 title: `Preventiva: ${contract.clientName}`,
@@ -155,7 +161,7 @@ export default function SchedulePage() {
 
 
     return [...externalEvents, ...internalEvents, ...projectedEvents];
-  }, [externalTickets, internalTickets, user, contracts]);
+  }, [externalTickets, internalTickets, user, contracts, allSectors]);
 
   const onNavigate = useCallback((newDate: Date) => setCurrentDate(newDate), [setCurrentDate])
   const onView = useCallback((newView: View) => setCurrentView(newView), [setCurrentView])
