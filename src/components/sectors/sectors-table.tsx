@@ -43,35 +43,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { useToast } from "@/hooks/use-toast"
 
 
-const ActionsCell = ({ row }: { row: any }) => {
-  const sector = row.original as Sector;
-  const { toast } = useToast();
-
-  const handleCopyId = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(sector.id);
-    toast({ title: "ID do Setor copiado!" });
-  }
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="h-8 w-8 p-0" onClick={(e) => e.stopPropagation()}>
-          <span className="sr-only">Abrir menu</span>
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-        <DropdownMenuLabel>Ações</DropdownMenuLabel>
-        <DropdownMenuItem onClick={handleCopyId}>
-            <Copy className="mr-2 h-4 w-4" />
-            Copiar ID
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
-
 interface SectorsTableProps {
     data: Sector[];
     onUpdateSector: (sectorId: string, values: EditSectorFormValues, newStatus: 'active' | 'archived') => Promise<boolean>;
@@ -133,11 +104,6 @@ export function SectorsTable({ data, onUpdateSector }: SectorsTableProps) {
     cell: ({ row }) => (
       <Badge variant={row.getValue("status") === 'active' ? "default" : "destructive"} className="capitalize">{row.getValue("status") === 'active' ? 'Ativo' : 'Arquivado'}</Badge>
     ),
-  },
-  {
-    id: "actions",
-    enableHiding: false,
-    cell: ({ row }) => <ActionsCell row={row} />,
   },
 ]
 
