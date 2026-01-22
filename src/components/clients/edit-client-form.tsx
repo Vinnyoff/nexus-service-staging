@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useForm } from "react-hook-form";
@@ -97,7 +96,7 @@ export function EditClientForm({ client, onSave, onFinished }: EditClientFormPro
                   <FormItem>
                     <FormLabel>CPF / CNPJ</FormLabel>
                     <FormControl>
-                      <Input placeholder="00.000.000/0000-00" {...field} />
+                      <Input placeholder="00.000.000/0000-00" {...field} value={field.value ?? ''} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -124,7 +123,7 @@ export function EditClientForm({ client, onSave, onFinished }: EditClientFormPro
                     <FormItem>
                         <FormLabel>ID EuroInfo</FormLabel>
                         <FormControl>
-                        <Input placeholder="ID do sistema legado" {...field} />
+                        <Input placeholder="ID do sistema legado" {...field} value={field.value ?? ''} />
                         </FormControl>
                         <FormMessage />
                     </FormItem>
@@ -137,7 +136,7 @@ export function EditClientForm({ client, onSave, onFinished }: EditClientFormPro
                     <FormItem>
                         <FormLabel>ID RondoInfo</FormLabel>
                         <FormControl>
-                        <Input placeholder="ID do sistema legado" {...field} />
+                        <Input placeholder="ID do sistema legado" {...field} value={field.value ?? ''} />
                         </FormControl>
                         <FormMessage />
                     </FormItem>
@@ -152,7 +151,7 @@ export function EditClientForm({ client, onSave, onFinished }: EditClientFormPro
                 <FormItem>
                     <FormLabel>SLA (em horas)</FormLabel>
                     <FormControl>
-                    <Input type="number" placeholder="Deixe em branco para nenhum" {...field} />
+                    <Input type="number" placeholder="Deixe em branco para nenhum" {...field} value={field.value ?? ''} />
                     </FormControl>
                     <FormMessage />
                 </FormItem>
@@ -182,7 +181,7 @@ export function EditClientForm({ client, onSave, onFinished }: EditClientFormPro
                     <FormItem>
                         <FormLabel>Número</FormLabel>
                         <FormControl>
-                        <Input placeholder="123" {...field} />
+                        <Input placeholder="123" {...field} value={field.value ?? ''} />
                         </FormControl>
                         <FormMessage />
                     </FormItem>
@@ -195,7 +194,7 @@ export function EditClientForm({ client, onSave, onFinished }: EditClientFormPro
                     <FormItem>
                         <FormLabel>Complemento</FormLabel>
                         <FormControl>
-                        <Input placeholder="Apto, Bloco..." {...field} />
+                        <Input placeholder="Apto, Bloco..." {...field} value={field.value ?? ''} />
                         </FormControl>
                         <FormMessage />
                     </FormItem>
