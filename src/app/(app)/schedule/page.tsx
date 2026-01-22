@@ -124,7 +124,11 @@ export default function SchedulePage() {
     
     const projectedEvents: CalendarEvent[] = [];
     visibleContracts.forEach(contract => {
-        contract.sectorIds.forEach(sectorId => {
+        const visibleSectorsForContract = user.role === 'encarregado' 
+            ? contract.sectorIds.filter(sId => user.sectorIds?.includes(sId))
+            : contract.sectorIds;
+
+        visibleSectorsForContract.forEach(sectorId => {
             const lastTicket = externalTickets
                 .filter(t => t.client.id === contract.clientId && t.sectorId === sectorId && t.type === 'contrato' && t.status === 'concluído')
                 .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
