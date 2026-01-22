@@ -744,7 +744,7 @@ export default function ExternalTicketsPage() {
                     onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                     disabled={currentPage === 1}
                 >
-                    <ChevronLeft className="h-4 w-4" />
+                    <ChevronLeft className="mr-2 h-4 w-4" />
                     Anterior
                 </Button>
                 <Button
@@ -754,7 +754,7 @@ export default function ExternalTicketsPage() {
                     disabled={currentPage === totalPages}
                 >
                     Próximo
-                    <ChevronRight className="h-4 w-4" />
+                    <ChevronRight className="ml-2 h-4 w-4" />
                 </Button>
                  <Button
                     variant="outline"
@@ -805,4 +805,3 @@ export default function ExternalTicketsPage() {
     </>
   );
 }
-
