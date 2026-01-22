@@ -79,6 +79,17 @@ export default function ExternalTicketsPage() {
 
   useEffect(() => {
     setLoading(true);
+    
+    let loadedCount = 0;
+    const totalCollections = 5;
+
+    const onCollectionLoad = () => {
+        loadedCount++;
+        if (loadedCount === totalCollections) {
+            setLoading(false);
+        }
+    };
+    
     const unsubUsers = onSnapshot(collection(db, "users"), (snapshot) => {
         const usersData = snapshot.docs.map(doc => {
             const userData = { id: doc.id, ...doc.data() } as User;
@@ -90,27 +101,34 @@ export default function ExternalTicketsPage() {
             return userData;
         });
         setUsers(usersData);
-    }, () => setUsers([]));
+        onCollectionLoad();
+    }, () => { setUsers([]); onCollectionLoad(); });
     
     const unsubSectors = onSnapshot(collection(db, "sectors"), (snapshot) => {
         setSectors(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sector)));
-    }, () => setSectors([]));
+        onCollectionLoad();
+    }, () => { setSectors([]); onCollectionLoad(); });
     
     const unsubTechs = onSnapshot(collection(db, "technicians"), (snapshot) => {
         setTechnicians(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Technician)));
-    }, () => setTechnicians([]));
+        onCollectionLoad();
+    }, () => { setTechnicians([]); onCollectionLoad(); });
 
     const unsubTickets = onSnapshot(collection(db, "external-tickets"), (snapshot) => {
         setTickets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ExternalTicket)));
         setPullDistance(0);
-    }, () => setTickets([]));
+        onCollectionLoad();
+    }, () => { setTickets([]); onCollectionLoad(); });
     
     const unsubChecklists = onSnapshot(collection(db, "checklists"), (snapshot) => {
         setChecklists(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Checklist)));
-    }, () => setChecklists([]));
+        onCollectionLoad();
+    }, () => { setChecklists([]); onCollectionLoad(); });
 
     // Failsafe to turn off loading
-    const timer = setTimeout(() => setLoading(false), 3000);
+    const timer = setTimeout(() => {
+      if (loading) setLoading(false);
+    }, 5000);
 
     return () => {
         unsubUsers();
@@ -120,7 +138,7 @@ export default function ExternalTicketsPage() {
         unsubChecklists();
         clearTimeout(timer);
     };
-}, []);
+  }, []);
 
   
   // Persist status filter to session storage
@@ -633,8 +651,13 @@ export default function ExternalTicketsPage() {
 
   if (loading) {
     return (
-        <div className="flex justify-center items-center h-64">
-            <Loader2 className="h-8 w-8 animate-spin" />
+        <div className="flex h-[calc(100vh-200px)] flex-col items-center justify-center gap-4 text-center">
+            <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            <div className="space-y-1">
+                <h2 className="text-xl font-semibold">Carregando Chamados...</h2>
+                <p className="text-muted-foreground">Por favor, aguarde enquanto buscamos os dados.</p>
+                <p className="text-sm font-bold text-muted-foreground pt-2">Nexus Service</p>
+            </div>
         </div>
     );
   }
