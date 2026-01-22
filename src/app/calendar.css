@@ -68,15 +68,15 @@
 /* Event styling */
 .rbc-event {
     background-color: hsl(var(--primary));
-    border: 1px solid hsl(var(--primary) / 0.8);
     color: hsl(var(--primary-foreground));
     border-radius: 4px;
-    padding: 1px 5px;
-    font-size: 0.75rem;
+    padding: 2px 5px; /* Increased padding */
+    font-size: 0.8rem; /* Increased font size */
     outline: none;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    line-height: 1.4; /* Added for readability */
 }
 
 .rbc-event:focus {

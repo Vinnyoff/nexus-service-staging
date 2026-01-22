@@ -16,6 +16,7 @@ import { addDays, parseISO, startOfDay } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
+import { cn } from '@/lib/utils';
 
 moment.locale('pt-br');
 const localizer = momentLocalizer(moment);
@@ -126,7 +127,7 @@ export default function SchedulePage() {
     const projectedEvents: CalendarEvent[] = [];
     visibleContracts.forEach(contract => {
         const visibleSectorsForContract = user.role === 'encarregado' 
-            ? contract.sectorIds.filter(sId => user.sectorIds?.includes(sId))
+            ? contract.sectorIds.filter(sId => user.sectorIds!.includes(sId))
             : contract.sectorIds;
 
         visibleSectorsForContract.forEach(sectorId => {
@@ -137,7 +138,7 @@ export default function SchedulePage() {
             
             const baseDate = lastTicket ? parseISO(lastTicket.updatedAt) : parseISO(contract.createdAt);
             let nextDueDate = addDays(baseDate, contract.frequencyDays);
-
+            
             const today = startOfDay(new Date());
             while (nextDueDate < today) {
                 nextDueDate = addDays(nextDueDate, contract.frequencyDays);
@@ -176,25 +177,59 @@ export default function SchedulePage() {
   }, [router]);
 
   const eventStyleGetter = (event: CalendarEvent) => {
-    let style: React.CSSProperties = {
-      backgroundColor: 'hsl(var(--primary))',
-      color: 'hsl(var(--primary-foreground))',
-      border: 'none',
-      opacity: 0.9,
+    const style: React.CSSProperties = {
+      borderRadius: '4px',
+      opacity: 0.95,
+      borderWidth: '1px',
+      borderStyle: 'solid',
+      borderColor: 'transparent',
     };
-    if (event.type === 'internal') {
-      style.backgroundColor = 'hsl(var(--secondary))';
-      style.color = 'hsl(var(--secondary-foreground))';
-    }
-    if (event.type === 'projected') {
-        style.backgroundColor = 'hsl(var(--muted))';
-        style.color = 'hsl(var(--muted-foreground))';
-        style.border = '1px dashed hsl(var(--border))'
-    }
+
     if ((event.resource as ExternalTicket).status === 'concluído') {
       style.backgroundColor = 'hsl(var(--muted))';
       style.color = 'hsl(var(--muted-foreground))';
-      style.opacity = 0.7;
+      style.textDecoration = 'line-through';
+      style.opacity = 0.6;
+      style.borderColor = 'hsl(var(--border))';
+      return { style };
+    }
+
+    switch (event.type) {
+        case 'external':
+            const ticket = event.resource as ExternalTicket;
+            switch (ticket.type) {
+                case 'urgente':
+                    style.backgroundColor = 'hsl(var(--destructive))';
+                    style.color = 'hsl(var(--destructive-foreground))';
+                    style.borderColor = 'hsl(var(--destructive) / 0.5)';
+                    break;
+                case 'contrato':
+                    style.backgroundColor = 'hsl(var(--chart-2))';
+                    style.color = 'hsl(var(--accent-foreground))';
+                    style.borderColor = 'hsl(var(--chart-2) / 0.5)';
+                    break;
+                case 'retorno':
+                    style.backgroundColor = 'hsl(var(--chart-5))';
+                    style.color = 'hsl(var(--accent-foreground))';
+                    style.borderColor = 'hsl(var(--chart-5) / 0.5)';
+                    break;
+                default: // padrão, agendado
+                    style.backgroundColor = 'hsl(var(--primary))';
+                    style.color = 'hsl(var(--primary-foreground))';
+                    style.borderColor = 'hsl(var(--primary) / 0.5)';
+            }
+            break;
+        case 'internal':
+            style.backgroundColor = 'hsl(var(--secondary))';
+            style.color = 'hsl(var(--secondary-foreground))';
+            style.borderColor = 'hsl(var(--border))';
+            break;
+        case 'projected':
+            style.backgroundColor = 'transparent';
+            style.color = 'hsl(var(--muted-foreground))';
+            style.borderStyle = 'dashed';
+            style.borderColor = 'hsl(var(--border))';
+            break;
     }
     return { style };
   };
@@ -238,50 +273,49 @@ export default function SchedulePage() {
                     Eventos do Mês
                 </CardTitle>
             </CardHeader>
-            <CardContent className="flex-1 overflow-y-auto">
-                <div className="space-y-4">
+             <CardContent className="flex-1 overflow-y-auto p-2">
+                <div className="space-y-2">
                     {events
                         .filter(e => moment(e.start).isSame(currentDate, 'month'))
                         .sort((a,b) => a.start.getTime() - b.start.getTime())
                         .map((event, index) => {
-                            if (event.type === 'projected') {
-                                const resource = event.resource as ProjectedEventResource;
-                                const sector = allSectors.find(s => s.id === resource.sectorId);
-                                return (
-                                    <div key={`proj-${index}`} className="flex items-start gap-4 p-3 rounded-md border border-dashed bg-muted/50">
-                                        <div className="flex flex-col items-center justify-center w-12">
-                                            <span className="text-sm font-bold text-primary">{moment(event.start).format('DD')}</span>
-                                            <span className="text-xs text-muted-foreground">{moment(event.start).format('MMM')}</span>
-                                        </div>
-                                        <div className="flex-1">
-                                            <p className="font-semibold text-sm">{event.title}</p>
-                                            <p className="text-xs text-muted-foreground flex items-center">
-                                                <CalendarCheck className="h-3 w-3 mr-1.5" />
-                                                {sector ? `Setor: ${sector.name}` : 'Preventiva'}
-                                            </p>
-                                        </div>
-                                        <Badge variant="outline" className="capitalize text-xs">Previsto</Badge>
-                                    </div>
-                                )
-                            }
+                            const isConcluded = event.resource.status === 'concluído';
+                            const isProjected = event.type === 'projected';
                             
-                           const user = allUsers.find(u => u.id === (event.resource as ExternalTicket).technicianId)
-                           return (
-                            <div key={`${event.resource.id}-${index}`} className="flex items-start gap-4 p-3 rounded-md border bg-muted/50 hover:bg-muted cursor-pointer" onClick={() => onSelectEvent(event)}>
-                                <div className="flex flex-col items-center justify-center w-12">
-                                    <span className="text-sm font-bold text-primary">{moment(event.start).format('DD')}</span>
-                                    <span className="text-xs text-muted-foreground">{moment(event.start).format('MMM')}</span>
+                            const eventStyle = eventStyleGetter(event).style;
+                            const listItemStyle: React.CSSProperties = {
+                                backgroundColor: isConcluded || isProjected ? 'hsl(var(--muted) / 0.3)' : `${eventStyle.backgroundColor}1A`, // 10% opacity
+                                borderLeftColor: eventStyle.backgroundColor,
+                                borderLeftWidth: '4px',
+                            };
+                            
+                            let icon = <Wrench className="h-4 w-4" />;
+                            if(isProjected) icon = <CalendarCheck className="h-4 w-4" />;
+                            else if(event.type === 'internal') icon = <Clock className="h-4 w-4" />;
+                            
+                            const assignee = allUsers.find(u => u.id === (event.resource as ExternalTicket).technicianId)
+                            const creator = allUsers.find(u => u.id === (event.resource as InternalTicket).creatorId)
+
+                            return (
+                            <div key={`${event.resource.id}-${index}`} style={listItemStyle} className={cn("flex items-center gap-3 p-3 rounded-lg cursor-pointer hover:bg-muted", isConcluded && "opacity-70")} onClick={() => !isProjected && onSelectEvent(event)}>
+                                <div className="flex flex-col items-center justify-center text-center w-12">
+                                    <span className="font-bold text-lg leading-none">{moment(event.start).format('DD')}</span>
+                                    <span className="text-xs text-muted-foreground uppercase">{moment(event.start).format('MMM')}</span>
                                 </div>
-                                <div className="flex-1">
-                                    <p className="font-semibold text-sm">{event.title}</p>
-                                    <p className="text-xs text-muted-foreground flex items-center">
-                                       {event.type === 'external' ? <Wrench className="h-3 w-3 mr-1.5" /> : <Clock className="h-3 w-3 mr-1.5" />}
-                                       {user ? `Téc: ${user.name}` : (event.resource as InternalTicket).creatorId ? `Criador: ${allUsers.find(u => u.id === (event.resource as InternalTicket).creatorId)?.name}` : ''}
-                                    </p>
+                                <div className="flex-1 space-y-0.5 overflow-hidden">
+                                    <p className={cn("font-semibold text-sm truncate", isConcluded && "line-through")}>{event.title}</p>
+                                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                        <div className="flex items-center gap-1.5">
+                                            {icon}
+                                            <span>{isProjected ? `Setor: ${allSectors.find(s => s.id === (event.resource as ProjectedEventResource).sectorId)?.name}` : (assignee ? assignee.name.split(' ')[0] : (creator ? `Por: ${creator.name.split(' ')[0]}`: 'N/A'))}</span>
+                                        </div>
+                                    </div>
                                 </div>
-                                <Badge variant={event.resource.status === 'concluído' ? 'outline' : 'default'} className="capitalize text-xs">{event.resource.status}</Badge>
+                                <Badge variant={isConcluded ? 'outline' : 'default'} style={isConcluded ? {} : {backgroundColor: eventStyle.backgroundColor, color: eventStyle.color}} className="capitalize text-xs whitespace-nowrap">
+                                    {isProjected ? 'Previsto' : event.resource.status}
+                                </Badge>
                             </div>
-                           )
+                            )
                         })
                     }
                      {events.filter(e => moment(e.start).isSame(currentDate, 'month')).length === 0 && (
