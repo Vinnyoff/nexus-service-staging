@@ -15,21 +15,26 @@ import { differenceInDays, parseISO } from 'date-fns';
  */
 async function findLastPreventiveTicket(clientId: string, sectorId: string): Promise<ExternalTicket | null> {
   const ticketsRef = collection(db, 'external-tickets');
+  // A query complexa com múltiplos 'where' e 'orderBy' estava exigindo um índice composto.
+  // Para evitar isso, removemos o orderBy e o limit da query e fazemos a ordenação em memória.
   const q = query(
     ticketsRef,
     where('client.id', '==', clientId),
     where('sectorId', '==', sectorId),
-    where('type', '==', 'contrato'),
-    orderBy('createdAt', 'desc'),
-    limit(1)
+    where('type', '==', 'contrato')
   );
 
   const querySnapshot = await getDocs(q);
-  if (!querySnapshot.empty) {
-    const lastTicketDoc = querySnapshot.docs[0];
-    return { id: lastTicketDoc.id, ...lastTicketDoc.data() } as ExternalTicket;
+
+  if (querySnapshot.empty) {
+    return null;
   }
-  return null;
+
+  // Ordena os tickets em memória para encontrar o mais recente.
+  const tickets = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ExternalTicket));
+  tickets.sort((a, b) => parseISO(b.createdAt).getTime() - parseISO(a.createdAt).getTime());
+  
+  return tickets[0];
 }
 
 /**
