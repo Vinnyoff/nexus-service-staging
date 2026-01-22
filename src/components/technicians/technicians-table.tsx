@@ -22,7 +22,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
@@ -62,40 +61,6 @@ const getStatusText = (status: Technician['status']) => {
     }
 }
 
-interface ActionsCellProps {
-  row: any;
-}
-
-const ActionsCell: React.FC<ActionsCellProps> = ({ row }) => {
-  const technician = row.original as Technician;
-  const { toast } = useToast();
-
-  const handleCopyId = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(technician.id);
-    toast({ title: "ID do técnico copiado!" });
-  };
-
-
-  return (
-    <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="h-8 w-8 p-0" onClick={(e) => e.stopPropagation()}>
-            <span className="sr-only">Abrir menu</span>
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-          <DropdownMenuLabel>Ações</DropdownMenuLabel>
-          <DropdownMenuItem onClick={handleCopyId}>
-              <Copy className="mr-2 h-4 w-4" />
-            Copiar ID
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-  )
-}
-
 interface TechniciansTableProps {
     data: Technician[];
     sectors: Sector[];
@@ -114,6 +79,7 @@ export function TechniciansTable({ data, sectors, onSavePermissions, onUpdateTec
   const [selectedTechnician, setSelectedTechnician] = React.useState<Technician | null>(null);
   const [isEditOpen, setIsEditOpen] = React.useState(false);
   const [showInactive, setShowInactive] = React.useState(false);
+  const { toast } = useToast();
 
   const handleEdit = (technician: Technician) => {
     setSelectedTechnician(technician);
@@ -176,11 +142,6 @@ export function TechniciansTable({ data, sectors, onSavePermissions, onUpdateTec
           const status = row.getValue("status") as Technician['status'];
           return <Badge variant={getStatusVariant(status)} className="capitalize">{getStatusText(status)}</Badge>
       }
-    },
-    {
-      id: "actions",
-      enableHiding: false,
-      cell: (props) => <ActionsCell {...props} />,
     },
   ]
 
@@ -259,7 +220,7 @@ export function TechniciansTable({ data, sectors, onSavePermissions, onUpdateTec
                   className="cursor-pointer"
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} onClick={(e) => { if (cell.column.id === 'actions') { e.stopPropagation(); }}}>
+                    <TableCell key={cell.id}>
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()
@@ -367,7 +328,7 @@ export function TechniciansTable({ data, sectors, onSavePermissions, onUpdateTec
                                 className="h-6 w-6"
                                 onClick={() => {
                                     navigator.clipboard.writeText(selectedTechnician.id);
-                                    useToast().toast({ title: "ID copiado para a área de transferência." });
+                                    toast({ title: "ID copiado para a área de transferência." });
                                 }}
                                 >
                                 <Copy className="h-4 w-4" />

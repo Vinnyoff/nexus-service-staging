@@ -41,17 +41,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (userDocSnap.exists()) {
             const appUser = { id: userDocSnap.id, ...userDocSnap.data() } as User;
             
-            if (!appUser.sectorIds || !Array.isArray(appUser.sectorIds)) {
-                appUser.sectorIds = [];
+            // Critical: Check if the user's status is active
+            if (appUser.status === 'inactive') {
+                console.warn(`User ${firebaseUser.uid} is inactive. Signing out.`);
+                toast({
+                    variant: "destructive",
+                    title: "Acesso Negado",
+                    description: "Sua conta está inativa. Contate um administrador.",
+                });
+                await signOut(auth);
+                setUser(null);
+            } else {
+                if (!appUser.sectorIds || !Array.isArray(appUser.sectorIds)) {
+                    appUser.sectorIds = [];
+                }
+                setUser(appUser);
             }
-
-            setUser(appUser);
           } else {
             console.warn("User profile not found in Firestore for UID:", firebaseUser.uid);
-            // This case is now handled more gracefully, but we still log it.
-            // It might indicate a new user who hasn't been assigned a profile yet.
-             await signOut(auth);
-             setUser(null);
+            await signOut(auth);
+            setUser(null);
           }
         } catch (error) {
           console.error("Error fetching user data from Firestore:", error);
