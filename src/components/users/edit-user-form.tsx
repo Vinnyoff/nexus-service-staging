@@ -193,6 +193,21 @@ export function EditUserForm({ user, onSave, onSavePermissions, onFinished, sect
   });
 
   const role = form.watch("role");
+  
+  useEffect(() => {
+    const defaultPerms = user.role === 'gerente' ? defaultGerentePermissions : defaultEncarregadoPermissions;
+    form.reset({
+      name: user.name,
+      phone: user.phone || "",
+      role: user.role as 'gerente' | 'encarregado' | 'vendedor',
+      sectorIds: user.sectorIds || [],
+      euroInfoId: user.euroInfoId || "",
+      rondoInfoId: user.rondoInfoId || "",
+      status: user.status as 'active' | 'inactive',
+      permissions: { ...defaultPerms, ...user.permissions }
+    });
+  }, [user, form]);
+
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSaving(true);

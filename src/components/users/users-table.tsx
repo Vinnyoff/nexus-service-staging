@@ -14,17 +14,9 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table"
-import { ArrowUpDown, MoreHorizontal, ChevronLeft, ChevronsLeft, ChevronsRight, ChevronRight, Copy } from "lucide-react"
+import { ArrowUpDown, ChevronLeft, ChevronsLeft, ChevronsRight, ChevronRight } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import {
   Table,
@@ -37,13 +29,13 @@ import {
 import { Badge } from "@/components/ui/badge"
 import type { User, Sector, UserStatus, ModulePermissions } from "@/lib/types"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../ui/dialog"
-import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/hooks/use-auth"
 import { EditUserForm, EditUserFormValues } from "./edit-user-form";
 import { Label } from "../ui/label";
 import { Checkbox } from "../ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-
+import { useToast } from "@/hooks/use-toast"
+import { Copy } from "lucide-react"
 
 const getStatusVariant = (status: UserStatus) => {
     switch (status) {
@@ -61,35 +53,6 @@ const getStatusText = (status: UserStatus) => {
         case 'pending_invitation': return 'Pendente';
         default: return status;
     }
-}
-
-const ActionsCell = ({ row }: { row: any }) => {
-  const user = row.original as User;
-  const { toast } = useToast();
-
-  const handleCopyId = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(user.id);
-    toast({ title: "ID do Usuário copiado!" });
-  }
-
-  return (
-    <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0" onClick={(e) => e.stopPropagation()}>
-                <span className="sr-only">Abrir menu</span>
-                <MoreHorizontal className="h-4 w-4" />
-            </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-            <DropdownMenuLabel>Ações</DropdownMenuLabel>
-            <DropdownMenuItem onClick={handleCopyId}>
-                <Copy className="mr-2 h-4 w-4" />
-                Copiar ID
-            </DropdownMenuItem>
-        </DropdownMenuContent>
-    </DropdownMenu>
-  )
 }
 
 interface UsersTableProps {
@@ -111,6 +74,7 @@ export function UsersTable({ data, sectors, onSaveUser, onSavePermissions }: Use
   const [isEditUserOpen, setIsEditUserOpen] = React.useState(false);
   const [selectedUser, setSelectedUser] = React.useState<User | null>(null);
   const [showInactive, setShowInactive] = React.useState(false);
+  const { toast } = useToast();
 
   const filteredData = React.useMemo(() => {
     if (showInactive) return data;
@@ -128,6 +92,7 @@ export function UsersTable({ data, sectors, onSaveUser, onSavePermissions }: Use
     if (success) {
       setIsEditUserOpen(false);
     }
+    return success;
   };
 
 
@@ -167,11 +132,6 @@ export function UsersTable({ data, sectors, onSaveUser, onSavePermissions }: Use
           const status = row.getValue("status") as UserStatus;
           return <Badge variant={getStatusVariant(status)} className="capitalize">{getStatusText(status)}</Badge>
       },
-    },
-    {
-      id: "actions",
-      enableHiding: false,
-      cell: (props) => <ActionsCell {...props} />,
     },
   ]
 
@@ -358,7 +318,7 @@ export function UsersTable({ data, sectors, onSaveUser, onSavePermissions }: Use
                                 className="h-6 w-6"
                                 onClick={() => {
                                     navigator.clipboard.writeText(selectedUser.id);
-                                    useToast().toast({ title: "ID copiado para a área de transferência." });
+                                    toast({ title: "ID copiado para a área de transferência." });
                                 }}
                                 >
                                 <Copy className="h-4 w-4" />
