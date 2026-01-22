@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect } from "react";
@@ -86,7 +85,15 @@ export default function ClientsPage() {
   const handleUpdateClient = async (clientId: string, values: EditClientFormValues, newStatus: 'active' | 'inactive') => {
     const clientRef = doc(db, "clients", clientId);
     try {
-        const updatedData = { ...values, status: newStatus };
+        const updatedData: { [key: string]: any } = { ...values, status: newStatus };
+        
+        // Firestore doesn't allow 'undefined' values. We need to remove them before updating.
+        Object.keys(updatedData).forEach(key => {
+            if (updatedData[key] === undefined) {
+                delete updatedData[key];
+            }
+        });
+
         await updateDoc(clientRef, updatedData);
         toast({ title: "Cliente atualizado com sucesso!" });
         return true;
