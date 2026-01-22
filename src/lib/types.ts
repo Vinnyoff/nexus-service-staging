@@ -240,12 +240,20 @@ export interface TicketReportSummary {
   improvementSuggestions: string;
 }
 
+export interface ProjectedEventResource {
+  id: string;
+  clientName: string;
+  clientId: string;
+  sectorId: string;
+  status: 'previsto';
+}
+
 export interface CalendarEvent {
   title: string;
   start: Date;
   end: Date;
-  resource: ExternalTicket | InternalTicket;
-  type: 'external' | 'internal';
+  resource: ExternalTicket | InternalTicket | ProjectedEventResource;
+  type: 'external' | 'internal' | 'projected';
 }
 
 export interface PreventiveRoutePlan {

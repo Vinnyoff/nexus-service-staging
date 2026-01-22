@@ -3,15 +3,15 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { useAuth } from '@/hooks/use-auth';
-import type { CalendarEvent, ExternalTicket, InternalTicket, User } from '@/lib/types';
+import type { CalendarEvent, ExternalTicket, InternalTicket, User, ServiceContract, ProjectedEventResource, Sector } from '@/lib/types';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '@/firebase/config';
-import { Loader2, Calendar as CalendarIcon, List, Clock, Wrench } from 'lucide-react';
+import { Loader2, Calendar as CalendarIcon, List, Clock, Wrench, CalendarCheck } from 'lucide-react';
 import { Calendar, momentLocalizer, Views, NavigateAction, View } from 'react-big-calendar';
 import moment from 'moment';
 import 'moment/locale/pt-br';
 import '../../calendar.css';
-import { parseISO } from 'date-fns';
+import { addDays, parseISO } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
@@ -41,6 +41,8 @@ export default function SchedulePage() {
   const [externalTickets, setExternalTickets] = useState<ExternalTicket[]>([]);
   const [internalTickets, setInternalTickets] = useState<InternalTicket[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [contracts, setContracts] = useState<ServiceContract[]>([]);
+  const [allSectors, setAllSectors] = useState<Sector[]>([]);
   const [loading, setLoading] = useState(true);
   
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -49,19 +51,37 @@ export default function SchedulePage() {
   useEffect(() => {
     setLoading(true);
 
-    const unsubscribes = [
-      onSnapshot(collection(db, 'external-tickets'), (snapshot) => {
-        setExternalTickets(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as ExternalTicket)));
-      }),
-      onSnapshot(collection(db, 'internal-tickets'), (snapshot) => {
-        setInternalTickets(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as InternalTicket)));
-      }),
-      onSnapshot(collection(db, 'users'), (snapshot) => {
-        setAllUsers(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as User)));
-      }),
+    const collectionsToFetch = [
+      { name: 'external-tickets', setter: setExternalTickets },
+      { name: 'internal-tickets', setter: setInternalTickets },
+      { name: 'users', setter: setAllUsers },
+      { name: 'serviceContracts', setter: setContracts },
+      { name: 'sectors', setter: setAllSectors },
     ];
 
-    setLoading(false);
+    let loadedCount = 0;
+    const totalCollections = collectionsToFetch.length;
+
+    const unsubscribes = collectionsToFetch.map(({ name, setter }) => {
+      return onSnapshot(collection(db, name),
+        (snapshot) => {
+          setter(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any);
+          loadedCount++;
+          if (loadedCount === totalCollections) {
+            setLoading(false);
+          }
+        },
+        (error) => {
+          console.error(`Error fetching ${name}:`, error);
+          setter([]);
+          loadedCount++;
+          if (loadedCount === totalCollections) {
+            setLoading(false);
+          }
+        }
+      );
+    });
+
     return () => unsubscribes.forEach((unsub) => unsub());
   }, []);
   
@@ -70,21 +90,16 @@ export default function SchedulePage() {
 
     let visibleExternalTickets = externalTickets;
     let visibleInternalTickets = internalTickets;
+    let visibleContracts = contracts.filter(c => c.status === 'active');
 
     if (user.role === 'encarregado') {
-      visibleExternalTickets = externalTickets.filter(ticket => 
-        user.sectorIds?.includes(ticket.sectorId)
-      );
-      visibleInternalTickets = internalTickets.filter(ticket => 
-        ticket.sectorId && user.sectorIds?.includes(ticket.sectorId)
-      );
+      visibleExternalTickets = externalTickets.filter(ticket => user.sectorIds?.includes(ticket.sectorId));
+      visibleInternalTickets = internalTickets.filter(ticket => ticket.sectorId && user.sectorIds?.includes(ticket.sectorId));
+      visibleContracts = visibleContracts.filter(c => c.sectorIds.some(sId => user.sectorIds?.includes(sId)));
     } else if (user.role === 'tecnico') {
-      visibleExternalTickets = externalTickets.filter(ticket =>
-        ticket.technicianId === user.id
-      );
-      visibleInternalTickets = internalTickets.filter(ticket =>
-        ticket.assigneeId === user.id
-      );
+      visibleExternalTickets = externalTickets.filter(ticket => ticket.technicianId === user.id);
+      visibleInternalTickets = internalTickets.filter(ticket => ticket.assigneeId === user.id);
+      visibleContracts = []; // Técnicos não veem preventivas futuras
     }
 
     const externalEvents: CalendarEvent[] = visibleExternalTickets
@@ -106,9 +121,37 @@ export default function SchedulePage() {
             resource: ticket,
             type: 'internal'
         }));
+    
+    const projectedEvents: CalendarEvent[] = [];
+    visibleContracts.forEach(contract => {
+        contract.sectorIds.forEach(sectorId => {
+            const lastTicket = externalTickets
+                .filter(t => t.client.id === contract.clientId && t.sectorId === sectorId && t.type === 'contrato' && t.status === 'concluído')
+                .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+                [0];
+            
+            const baseDate = lastTicket ? parseISO(lastTicket.updatedAt) : parseISO(contract.createdAt);
+            const nextDueDate = addDays(baseDate, contract.frequencyDays);
 
-    return [...externalEvents, ...internalEvents];
-  }, [externalTickets, internalTickets, user]);
+            projectedEvents.push({
+                title: `Preventiva: ${contract.clientName}`,
+                start: nextDueDate,
+                end: nextDueDate,
+                type: 'projected',
+                resource: {
+                    id: `proj-${contract.id}-${sectorId}`,
+                    clientName: contract.clientName,
+                    clientId: contract.clientId,
+                    sectorId: sectorId,
+                    status: 'previsto',
+                }
+            });
+        });
+    });
+
+
+    return [...externalEvents, ...internalEvents, ...projectedEvents];
+  }, [externalTickets, internalTickets, user, contracts]);
 
   const onNavigate = useCallback((newDate: Date) => setCurrentDate(newDate), [setCurrentDate])
   const onView = useCallback((newView: View) => setCurrentView(newView), [setCurrentView])
@@ -116,24 +159,32 @@ export default function SchedulePage() {
   const onSelectEvent = useCallback((event: CalendarEvent) => {
     if (event.type === 'external') {
       router.push(`/external-tickets/${event.resource.id}`);
-    } else {
+    } else if (event.type === 'internal') {
       // Potentially open a dialog for internal tickets in the future
       console.log('Internal ticket selected:', event.resource);
     }
   }, [router]);
 
   const eventStyleGetter = (event: CalendarEvent) => {
-    let style = {
+    let style: React.CSSProperties = {
       backgroundColor: 'hsl(var(--primary))',
       color: 'hsl(var(--primary-foreground))',
+      border: 'none',
+      opacity: 0.9,
     };
     if (event.type === 'internal') {
       style.backgroundColor = 'hsl(var(--secondary))';
       style.color = 'hsl(var(--secondary-foreground))';
     }
+    if (event.type === 'projected') {
+        style.backgroundColor = 'hsl(var(--muted))';
+        style.color = 'hsl(var(--muted-foreground))';
+        style.border = '1px dashed hsl(var(--border))'
+    }
     if ((event.resource as ExternalTicket).status === 'concluído') {
       style.backgroundColor = 'hsl(var(--muted))';
       style.color = 'hsl(var(--muted-foreground))';
+      style.opacity = 0.7;
     }
     return { style };
   };
@@ -183,6 +234,27 @@ export default function SchedulePage() {
                         .filter(e => moment(e.start).isSame(currentDate, 'month'))
                         .sort((a,b) => a.start.getTime() - b.start.getTime())
                         .map((event, index) => {
+                            if (event.type === 'projected') {
+                                const resource = event.resource as ProjectedEventResource;
+                                const sector = allSectors.find(s => s.id === resource.sectorId);
+                                return (
+                                    <div key={`proj-${index}`} className="flex items-start gap-4 p-3 rounded-md border border-dashed bg-muted/50">
+                                        <div className="flex flex-col items-center justify-center w-12">
+                                            <span className="text-sm font-bold text-primary">{moment(event.start).format('DD')}</span>
+                                            <span className="text-xs text-muted-foreground">{moment(event.start).format('MMM')}</span>
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="font-semibold text-sm">{event.title}</p>
+                                            <p className="text-xs text-muted-foreground flex items-center">
+                                                <CalendarCheck className="h-3 w-3 mr-1.5" />
+                                                {sector ? `Setor: ${sector.name}` : 'Preventiva'}
+                                            </p>
+                                        </div>
+                                        <Badge variant="outline" className="capitalize text-xs">Previsto</Badge>
+                                    </div>
+                                )
+                            }
+                            
                            const user = allUsers.find(u => u.id === (event.resource as ExternalTicket).technicianId)
                            return (
                             <div key={`${event.resource.id}-${index}`} className="flex items-start gap-4 p-3 rounded-md border bg-muted/50 hover:bg-muted cursor-pointer" onClick={() => onSelectEvent(event)}>
