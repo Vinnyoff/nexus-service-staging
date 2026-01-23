@@ -8,20 +8,20 @@ import { Client, ExternalTicket, ServiceContract, Checklist, ChecklistTaskState 
 import { differenceInDays, parseISO } from 'date-fns';
 
 /**
- * Busca o último chamado preventivo para um cliente específico e um setor específico.
+ * Busca o último chamado preventivo CONCLUÍDO para um cliente específico e um setor específico.
  * @param clientId - ID do cliente.
  * @param sectorId - ID do setor.
- * @returns O último chamado preventivo ou null se não houver.
+ * @returns O último chamado preventivo concluído ou null se não houver.
  */
 async function findLastPreventiveTicket(clientId: string, sectorId: string): Promise<ExternalTicket | null> {
   const ticketsRef = collection(db, 'external-tickets');
-  // A query complexa com múltiplos 'where' e 'orderBy' estava exigindo um índice composto.
-  // Para evitar isso, removemos o orderBy e o limit da query e fazemos a ordenação em memória.
+  // Filtra por chamados concluídos para garantir que a contagem comece da finalização.
   const q = query(
     ticketsRef,
     where('client.id', '==', clientId),
     where('sectorId', '==', sectorId),
-    where('type', '==', 'contrato')
+    where('type', '==', 'contrato'),
+    where('status', '==', 'concluído')
   );
 
   const querySnapshot = await getDocs(q);
@@ -30,9 +30,9 @@ async function findLastPreventiveTicket(clientId: string, sectorId: string): Pro
     return null;
   }
 
-  // Ordena os tickets em memória para encontrar o mais recente.
+  // Ordena os tickets pela data de atualização (conclusão) para encontrar o mais recente.
   const tickets = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ExternalTicket));
-  tickets.sort((a, b) => parseISO(b.createdAt).getTime() - parseISO(a.createdAt).getTime());
+  tickets.sort((a, b) => parseISO(b.updatedAt).getTime() - parseISO(a.updatedAt).getTime());
   
   return tickets[0];
 }
@@ -70,8 +70,8 @@ export async function generatePreventiveTickets() {
     for (const sectorId of contract.sectorIds) {
       const lastTicket = await findLastPreventiveTicket(clientData.id, sectorId);
       
-      // Se não houver nenhum chamado anterior (primeira preventiva após o inicial),
-      // use a data de criação do contrato como base.
+      // A base para a contagem de dias é a data de finalização (updatedAt) do último chamado preventivo.
+      // Se não houver nenhum, a base é a data de criação do contrato.
       const lastEventDate = lastTicket?.updatedAt ? new Date(lastTicket.updatedAt) : new Date(contract.createdAt);
       const daysSinceLastEvent = differenceInDays(today, lastEventDate);
 
