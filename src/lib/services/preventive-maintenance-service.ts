@@ -1,4 +1,5 @@
 
+
 // Este arquivo contém a lógica que será usada em uma Cloud Function para
 // automatizar a criação de chamados de manutenção preventiva.
 
@@ -21,7 +22,9 @@ async function findLastPreventiveTicket(clientId: string, sectorId: string): Pro
     where('client.id', '==', clientId),
     where('sectorId', '==', sectorId),
     where('type', '==', 'contrato'),
-    where('status', '==', 'concluído')
+    where('status', '==', 'concluído'),
+    orderBy('updatedAt', 'desc'), // Order by completion date descending
+    limit(1)
   );
 
   const querySnapshot = await getDocs(q);
@@ -29,13 +32,31 @@ async function findLastPreventiveTicket(clientId: string, sectorId: string): Pro
   if (querySnapshot.empty) {
     return null;
   }
-
-  // Ordena os tickets pela data de atualização (conclusão) para encontrar o mais recente.
-  const tickets = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ExternalTicket));
-  tickets.sort((a, b) => parseISO(b.updatedAt).getTime() - parseISO(a.updatedAt).getTime());
   
-  return tickets[0];
+  const lastTicketDoc = querySnapshot.docs[0];
+  return { id: lastTicketDoc.id, ...lastTicketDoc.data() } as ExternalTicket;
 }
+
+/**
+ * Verifica se já existe um chamado preventivo aberto (pendente ou em andamento) para um cliente/setor.
+ * @param clientId - ID do cliente.
+ * @param sectorId - ID do setor.
+ * @returns True se houver um chamado aberto, false caso contrário.
+ */
+async function hasOpenPreventiveTicket(clientId: string, sectorId: string): Promise<boolean> {
+    const ticketsRef = collection(db, 'external-tickets');
+    const q = query(
+        ticketsRef,
+        where('client.id', '==', clientId),
+        where('sectorId', '==', sectorId),
+        where('type', '==', 'contrato'),
+        where('status', 'in', ['pendente', 'em andamento'])
+    );
+
+    const querySnapshot = await getDocs(q);
+    return !querySnapshot.empty;
+}
+
 
 /**
  * Função principal que verifica os clientes e gera os chamados preventivos necessários.
@@ -68,10 +89,18 @@ export async function generatePreventiveTickets() {
     
 
     for (const sectorId of contract.sectorIds) {
+      // 1. PRIMEIRO, verificar se já existe um chamado preventivo aberto. Se sim, pular.
+      const isOpen = await hasOpenPreventiveTicket(clientData.id, sectorId);
+      if (isOpen) {
+          console.log(`Skipping: Chamado preventivo já aberto para ${clientData.name} no setor ${sectorId}.`);
+          continue; // Pula para o próximo setor/contrato
+      }
+
+      // 2. Se não houver chamado aberto, proceder com a lógica de criação.
       const lastTicket = await findLastPreventiveTicket(clientData.id, sectorId);
       
-      // A base para a contagem de dias é a data de finalização (updatedAt) do último chamado preventivo.
-      // Se não houver nenhum, a base é a data de criação do contrato.
+      // A base para a contagem de dias é a data de finalização (updatedAt) do último chamado.
+      // Se não houver chamado concluído, a base é a data de criação do contrato.
       const lastEventDate = lastTicket?.updatedAt ? new Date(lastTicket.updatedAt) : new Date(contract.createdAt);
       const daysSinceLastEvent = differenceInDays(today, lastEventDate);
 
