@@ -16,15 +16,13 @@ import { differenceInDays, parseISO } from 'date-fns';
  */
 async function findLastPreventiveTicket(clientId: string, sectorId: string): Promise<ExternalTicket | null> {
   const ticketsRef = collection(db, 'external-tickets');
-  // Filtra por chamados concluídos para garantir que a contagem comece da finalização.
+  // Query mais ampla para evitar a necessidade de um índice composto complexo.
+  // Filtra apenas por cliente e status, o resto é feito na aplicação.
   const q = query(
     ticketsRef,
     where('client.id', '==', clientId),
-    where('sectorId', '==', sectorId),
-    where('type', '==', 'contrato'),
     where('status', '==', 'concluído'),
-    orderBy('updatedAt', 'desc'), // Order by completion date descending
-    limit(1)
+    where('type', '==', 'contrato')
   );
 
   const querySnapshot = await getDocs(q);
@@ -33,8 +31,18 @@ async function findLastPreventiveTicket(clientId: string, sectorId: string): Pro
     return null;
   }
   
-  const lastTicketDoc = querySnapshot.docs[0];
-  return { id: lastTicketDoc.id, ...lastTicketDoc.data() } as ExternalTicket;
+  // Filtra e ordena os resultados no lado da aplicação
+  const tickets = querySnapshot.docs
+    .map(doc => ({ id: doc.id, ...doc.data() } as ExternalTicket))
+    .filter(ticket => ticket.sectorId === sectorId);
+
+  if (tickets.length === 0) {
+    return null;
+  }
+  
+  tickets.sort((a,b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
+  return tickets[0];
 }
 
 /**
@@ -45,16 +53,27 @@ async function findLastPreventiveTicket(clientId: string, sectorId: string): Pro
  */
 async function hasOpenPreventiveTicket(clientId: string, sectorId: string): Promise<boolean> {
     const ticketsRef = collection(db, 'external-tickets');
+    // Query mais ampla para evitar a necessidade de um índice composto complexo.
     const q = query(
         ticketsRef,
         where('client.id', '==', clientId),
-        where('sectorId', '==', sectorId),
-        where('type', '==', 'contrato'),
         where('status', 'in', ['pendente', 'em andamento'])
     );
 
     const querySnapshot = await getDocs(q);
-    return !querySnapshot.empty;
+    if (querySnapshot.empty) {
+        return false;
+    }
+
+    // Filtra o resto na aplicação para confirmar se o chamado aberto é do tipo e setor corretos.
+    const hasOpenTicket = querySnapshot.docs
+        .map(doc => doc.data() as ExternalTicket)
+        .some(ticket => 
+            ticket.sectorId === sectorId &&
+            ticket.type === 'contrato'
+        );
+
+    return hasOpenTicket;
 }
 
 
