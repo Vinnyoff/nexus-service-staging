@@ -5,7 +5,7 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Calendar, User as UserIcon, Phone, MapPin, AlertCircle, ExternalLink, MessageSquare, Hand, CheckCircle, MapPinned, Undo, History, Camera, Loader2, Edit, Info, Pencil, ListChecks } from 'lucide-react';
+import { Calendar, User as UserIcon, Phone, MapPin, AlertCircle, ExternalLink, MessageSquare, Hand, CheckCircle, MapPinned, Undo, History, Camera, Loader2, Edit, Info, Pencil, ListChecks, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '../ui/badge';
 import { Separator } from '../ui/separator';
@@ -106,6 +106,7 @@ interface ExternalTicketDetailsProps {
   onAddComment: (commentText: string) => void;
   onReopenTicket: (ticketId: string, reason: string) => void;
   onReturnToPending: (ticketId: string, reason: string) => void;
+  onCancelTicket: (ticketId: string, reason: string) => void;
   onAssignToMe: () => void;
   onFinalizeTicket: (ticketId: string, observations: string, photos: File[], signature?: string) => Promise<boolean>;
   onDescriptionChange: (newDescription: string) => void;
@@ -123,7 +124,8 @@ export function ExternalTicketDetails({
     ticket, 
     onAddComment, 
     onReopenTicket, 
-    onReturnToPending, 
+    onReturnToPending,
+    onCancelTicket,
     onAssignToMe, 
     onFinalizeTicket, 
     onDescriptionChange,
@@ -144,6 +146,7 @@ export function ExternalTicketDetails({
   const [descriptionValue, setDescriptionValue] = useState(ticket.description);
   const [selectedTechnician, setSelectedTechnician] = useState('');
   const [reason, setReason] = useState('');
+  const [cancellationReason, setCancellationReason] = useState('');
   
   const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
   const [isSignatureDialogOpen, setIsSignatureDialogOpen] = useState(false);
@@ -171,6 +174,7 @@ export function ExternalTicketDetails({
   );
   
   const canSupervisorManage = currentUser && (currentUser.role === 'admin' || currentUser.role === 'gerente' || currentUser.role === 'encarregado');
+  const canBeCancelled = !isConcluded && !isCancelled;
   
   const assignableUsers = useMemo(() => {
     return users.filter(u => (u.role === 'tecnico' || u.role === 'encarregado') && u.sectorIds?.includes(ticket.sectorId));
@@ -674,6 +678,40 @@ export function ExternalTicketDetails({
               </>
             ) : null}
             {isCancelled && <p className='text-sm text-muted-foreground text-center'>Chamado cancelado. Nenhuma ação disponível.</p>}
+
+            {canBeCancelled && canUserIntervene && (
+                <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                        <Button className="w-full" variant="destructive">
+                            <XCircle className="mr-2 h-4 w-4" /> Cancelar Chamado
+                        </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Cancelar Chamado</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                Informe o motivo do cancelamento. Essa informação será salva nos comentários do chamado.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <div className="py-4">
+                            <Label htmlFor="cancel-reason">Justificativa</Label>
+                            <Textarea 
+                                id="cancel-reason"
+                                placeholder="Ex: Chamado duplicado, criado por engano..."
+                                value={cancellationReason}
+                                onChange={(e) => setCancellationReason(e.target.value)}
+                            />
+                        </div>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel onClick={() => setCancellationReason('')}>Voltar</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => onCancelTicket(ticket.id, cancellationReason)} disabled={!cancellationReason.trim()}>
+                                Confirmar Cancelamento
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            )}
+
           </CardContent>
         </Card>
 

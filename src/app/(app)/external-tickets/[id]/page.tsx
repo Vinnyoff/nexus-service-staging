@@ -271,6 +271,32 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
       toast({ variant: 'destructive', title: 'Erro ao devolver chamado' });
     }
   };
+  
+    const handleCancelTicket = async (id: string, reason: string) => {
+    if (!user) return;
+    const ticketRef = doc(db, "external-tickets", id);
+    try {
+      const newComment: Comment = {
+        id: `comment-${Date.now()}`,
+        authorId: user.id,
+        content: `**Chamado Cancelado:** ${reason}`,
+        createdAt: new Date().toISOString(),
+      };
+      await updateDoc(ticketRef, {
+        status: 'cancelado',
+        updatedAt: new Date().toISOString(),
+        comments: arrayUnion(newComment)
+      });
+      toast({
+        title: 'Chamado Cancelado!',
+        description: `O chamado #${id.substring(0,4)} foi cancelado.`,
+      });
+      router.push('/external-tickets');
+    } catch (error) {
+      console.error("Error cancelling ticket: ", error);
+      toast({ variant: 'destructive', title: 'Erro ao cancelar chamado' });
+    }
+  };
 
   const handleAssignTicketToCurrentUser = async () => {
     if (!ticket || !user) return;
@@ -393,6 +419,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
             onCheckIn={handleCheckIn}
             onUpdateChecklistTask={handleUpdateChecklistTask}
             onUploadChecklistPhoto={handleChecklistPhotoUpload}
+            onCancelTicket={handleCancelTicket}
             currentUser={user}
             users={users}
             allSectors={allSectors}
