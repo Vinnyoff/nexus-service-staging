@@ -5,8 +5,9 @@
 
 import { collection, getDocs, addDoc, query, where, orderBy, limit, doc, getDoc } from 'firebase/firestore';
 import { db } from '@/firebase/config';
-import { Client, ExternalTicket, ServiceContract, Checklist, ChecklistTaskState } from '@/lib/types';
+import { Client, ExternalTicket, ServiceContract, Checklist, ChecklistTaskState, Sector } from '@/lib/types';
 import { addDays, parseISO } from 'date-fns';
+import { sendWhatsappMessage } from './notification-service';
 
 /**
  * Busca o último chamado preventivo CONCLUÍDO para um cliente específico e um setor específico.
@@ -84,9 +85,16 @@ async function hasOpenPreventiveTicket(clientId: string, sectorId: string): Prom
 export async function generatePreventiveTickets() {
   console.log('Iniciando verificação de manutenções preventivas...');
   const contractsRef = collection(db, 'serviceContracts');
+  const sectorsRef = collection(db, 'sectors');
   const q = query(contractsRef, where('status', '==', 'active'));
 
-  const contractsSnapshot = await getDocs(q);
+  const [contractsSnapshot, sectorsSnapshot] = await Promise.all([
+    getDocs(q),
+    getDocs(sectorsRef)
+  ]);
+  
+  const allSectors = sectorsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sector));
+
   if (contractsSnapshot.empty) {
     console.log('Nenhum contrato de serviço ativo encontrado.');
     return {
@@ -182,6 +190,18 @@ export async function generatePreventiveTickets() {
           const docRef = await addDoc(collection(db, 'external-tickets'), newTicketData);
           createdTickets.push(docRef.id);
           console.log(`Chamado ${docRef.id} criado com sucesso.`);
+
+          const sector = allSectors.find(s => s.id === sectorId);
+          if (sector?.whatsappGroupId) {
+              const message = `⚙️ Nova Preventiva Gerada Automaticamente ⚙️\n\n` +
+                              `*Cliente:* ${clientData.name}\n` +
+                              `*Descrição:* Manutenção preventiva de contrato.\n` +
+                              `*Setor:* ${sector.name}\n\n` +
+                              `Este chamado está agora pendente e aguardando atribuição.`;
+              
+              await sendWhatsappMessage(sector.whatsappGroupId, message);
+          }
+
         } catch (error) {
           console.error(`Falha ao criar chamado para o cliente ${clientData.id} e setor ${sectorId}:`, error);
         }
