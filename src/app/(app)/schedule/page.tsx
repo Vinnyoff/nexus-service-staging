@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/use-auth';
 import type { CalendarEvent, ExternalTicket, InternalTicket, User, ServiceContract, ProjectedEventResource, Sector } from '@/lib/types';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '@/firebase/config';
-import { Loader2, Calendar as CalendarIcon, List, Clock, Wrench, CalendarCheck } from 'lucide-react';
+import { Loader2, Calendar as CalendarIcon, List, Clock, Wrench, CalendarCheck, ShieldCheck, AlertCircle } from 'lucide-react';
 import { Calendar, momentLocalizer, Views, NavigateAction, View } from 'react-big-calendar';
 import moment from 'moment';
 import 'moment/locale/pt-br';
@@ -17,6 +17,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+
 
 moment.locale('pt-br');
 const localizer = momentLocalizer(moment);
@@ -36,6 +38,16 @@ const messages = {
   noEventsInRange: 'Não há eventos neste período.',
   showMore: (total: any) => `+ Ver mais (${total})`,
 };
+
+const LEGEND_ITEMS = [
+    { label: 'Padrão / Agendado', color: 'bg-primary' },
+    { label: 'Contrato', color: 'bg-[hsl(var(--chart-2))]' },
+    { label: 'Urgente', color: 'bg-destructive' },
+    { label: 'Retorno', color: 'bg-[hsl(var(--chart-5))]' },
+    { label: 'Atendimento Interno', color: 'bg-secondary' },
+    { label: 'Preventiva Prevista', color: 'border-muted-foreground', isProjected: true },
+    { label: 'Concluído', color: 'bg-muted', isConcluded: true },
+];
 
 export default function SchedulePage() {
   const { user } = useAuth();
@@ -95,9 +107,10 @@ export default function SchedulePage() {
     let visibleContracts = contracts.filter(c => c.status === 'active');
 
     if (user.role === 'encarregado') {
-      visibleExternalTickets = externalTickets.filter(ticket => user.sectorIds?.includes(ticket.sectorId));
-      visibleInternalTickets = internalTickets.filter(ticket => ticket.sectorId && user.sectorIds?.includes(ticket.sectorId));
-      visibleContracts = visibleContracts.filter(c => c.sectorIds.some(sId => user.sectorIds?.includes(sId)));
+      const userSectorIds = user.sectorIds || [];
+      visibleExternalTickets = externalTickets.filter(ticket => userSectorIds.includes(ticket.sectorId));
+      visibleInternalTickets = internalTickets.filter(ticket => ticket.sectorId && userSectorIds.includes(ticket.sectorId));
+      visibleContracts = visibleContracts.filter(c => c.sectorIds.some(sId => userSectorIds.includes(sId)));
     } else if (user.role === 'tecnico') {
       visibleExternalTickets = externalTickets.filter(ticket => ticket.technicianId === user.id);
       visibleInternalTickets = internalTickets.filter(ticket => ticket.assigneeId === user.id);
@@ -125,44 +138,48 @@ export default function SchedulePage() {
         }));
     
     const projectedEvents: CalendarEvent[] = [];
-    visibleContracts.forEach(contract => {
-        const visibleSectorsForContract = user.role === 'encarregado' 
-            ? contract.sectorIds.filter(sId => user.sectorIds!.includes(sId))
-            : contract.sectorIds;
+    if (user.role !== 'tecnico') {
+        visibleContracts.forEach(contract => {
+            const visibleSectorsForContract = user.role === 'encarregado' 
+                ? contract.sectorIds.filter(sId => user.sectorIds!.includes(sId))
+                : contract.sectorIds;
 
-        visibleSectorsForContract.forEach(sectorId => {
-            const lastTicket = externalTickets
-                .filter(t => t.client.id === contract.clientId && t.sectorId === sectorId && t.type === 'contrato' && t.status === 'concluído')
-                .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-                [0];
-            
-            const baseDate = lastTicket ? parseISO(lastTicket.updatedAt) : parseISO(contract.createdAt);
-            let nextDueDate = addDays(baseDate, contract.frequencyDays);
-            
-            const today = startOfDay(new Date());
-            while (nextDueDate < today) {
-                nextDueDate = addDays(nextDueDate, contract.frequencyDays);
-            }
-
-            projectedEvents.push({
-                title: `Preventiva: ${contract.clientName}`,
-                start: nextDueDate,
-                end: nextDueDate,
-                type: 'projected',
-                resource: {
-                    id: `proj-${contract.id}-${sectorId}`,
-                    clientName: contract.clientName,
-                    clientId: contract.clientId,
-                    sectorId: sectorId,
-                    status: 'previsto',
+            visibleSectorsForContract.forEach(sectorId => {
+                const lastTicket = externalTickets
+                    .filter(t => t.client.id === contract.clientId && t.sectorId === sectorId && t.type === 'contrato' && t.status === 'concluído')
+                    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+                    [0];
+                
+                const baseDate = lastTicket ? parseISO(lastTicket.updatedAt) : parseISO(contract.createdAt);
+                let nextDueDate = addDays(baseDate, contract.frequencyDays);
+                
+                const today = startOfDay(new Date());
+                while (nextDueDate < today) {
+                    nextDueDate = addDays(nextDueDate, contract.frequencyDays);
                 }
+                
+                const nextDueDateStartOfDay = startOfDay(nextDueDate);
+
+                projectedEvents.push({
+                    title: `Preventiva: ${contract.clientName}`,
+                    start: nextDueDateStartOfDay,
+                    end: nextDueDateStartOfDay,
+                    type: 'projected',
+                    resource: {
+                        id: `proj-${contract.id}-${sectorId}`,
+                        clientName: contract.clientName,
+                        clientId: contract.clientId,
+                        sectorId: sectorId,
+                        status: 'previsto',
+                    }
+                });
             });
         });
-    });
+    }
 
 
     return [...externalEvents, ...internalEvents, ...projectedEvents];
-  }, [externalTickets, internalTickets, user, contracts, allSectors]);
+  }, [externalTickets, internalTickets, user, contracts]);
 
   const onNavigate = useCallback((newDate: Date) => setCurrentDate(newDate), [setCurrentDate])
   const onView = useCallback((newView: View) => setCurrentView(newView), [setCurrentView])
@@ -185,7 +202,7 @@ export default function SchedulePage() {
       borderColor: 'transparent',
     };
 
-    if ((event.resource as ExternalTicket).status === 'concluído') {
+    if ((event.resource as ExternalTicket | InternalTicket).status === 'concluído') {
       style.backgroundColor = 'hsl(var(--muted))';
       style.color = 'hsl(var(--muted-foreground))';
       style.textDecoration = 'line-through';
@@ -246,8 +263,21 @@ export default function SchedulePage() {
     <>
       <PageHeader
         title="Agenda"
-        description="Visualize todos os atendimentos agendados."
+        description="Visualize todos os atendimentos agendados e previstos."
       />
+      <Alert className="mb-4">
+        <AlertDescription>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <span className="font-semibold text-sm">Legenda:</span>
+            {LEGEND_ITEMS.map(item => (
+                <div key={item.label} className="flex items-center gap-2">
+                    <div className={cn("h-3 w-3 rounded-full", item.color, item.isProjected && 'border-2 border-dashed bg-transparent', item.isConcluded && 'line-through opacity-70')} />
+                    <span className={cn("text-xs text-muted-foreground", item.isConcluded && 'line-through')}>{item.label}</span>
+                </div>
+            ))}
+          </div>
+        </AlertDescription>
+      </Alert>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-3 xl:col-span-2 h-[75vh] bg-card p-4 rounded-lg border">
             <Calendar
@@ -279,7 +309,7 @@ export default function SchedulePage() {
                         .filter(e => moment(e.start).isSame(currentDate, 'month'))
                         .sort((a,b) => a.start.getTime() - b.start.getTime())
                         .map((event, index) => {
-                            const isConcluded = event.resource.status === 'concluído';
+                            const isConcluded = (event.resource as ExternalTicket | InternalTicket).status === 'concluído';
                             const isProjected = event.type === 'projected';
                             
                             const eventStyle = eventStyleGetter(event).style;

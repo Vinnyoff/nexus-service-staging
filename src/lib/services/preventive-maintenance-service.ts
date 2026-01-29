@@ -6,7 +6,7 @@
 import { collection, getDocs, addDoc, query, where, orderBy, limit, doc, getDoc } from 'firebase/firestore';
 import { db } from '@/firebase/config';
 import { Client, ExternalTicket, ServiceContract, Checklist, ChecklistTaskState } from '@/lib/types';
-import { differenceInDays, parseISO } from 'date-fns';
+import { addDays, parseISO } from 'date-fns';
 
 /**
  * Busca o último chamado preventivo CONCLUÍDO para um cliente específico e um setor específico.
@@ -96,7 +96,6 @@ export async function generatePreventiveTickets() {
     };
   }
 
-  const today = new Date();
   const createdTickets: string[] = [];
 
   for (const contractDoc of contractsSnapshot.docs) {
@@ -121,9 +120,14 @@ export async function generatePreventiveTickets() {
       // A base para a contagem de dias é a data de finalização (updatedAt) do último chamado.
       // Se não houver chamado concluído, a base é a data de criação do contrato.
       const lastEventDate = lastTicket?.updatedAt ? new Date(lastTicket.updatedAt) : new Date(contract.createdAt);
-      const daysSinceLastEvent = differenceInDays(today, lastEventDate);
+      
+      const nextDueDate = addDays(lastEventDate, contract.frequencyDays);
+      const now = new Date();
 
-      if (daysSinceLastEvent >= contract.frequencyDays) {
+      // A verificação agora considera se a data de vencimento está no passado ou dentro das próximas 24 horas.
+      const twentyFourHoursFromNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+      if (nextDueDate <= twentyFourHoursFromNow) {
         console.log(`Gerando chamado preventivo para ${clientData.name} no setor ${sectorId}.`);
         
         let checklistState: ChecklistTaskState[] | undefined = undefined;
