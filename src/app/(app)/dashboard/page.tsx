@@ -1,11 +1,10 @@
-
 "use client"
 
 import { ClipboardList, Wrench, Users, CheckCircle, Clock, List, AlertCircle, Loader2 } from "lucide-react"
 import { PageHeader } from "@/components/page-header"
 import { useAuth } from "@/hooks/use-auth"
 import { RecentTicketsList } from "@/components/dashboard/recent-tickets-list"
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectSeparator } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { StatusChart } from "@/components/dashboard/status-chart"
 import { ActiveRoutesCard } from "@/components/dashboard/active-routes-card"
@@ -27,6 +26,21 @@ export default function Dashboard() {
   const [users, setUsers] = useState<User[]>([]);
   const [period, setPeriod] = useState("this-month");
   const [loading, setLoading] = useState(true);
+
+  const months = [
+    { value: '0', label: 'Janeiro' },
+    { value: '1', label: 'Fevereiro' },
+    { value: '2', label: 'Março' },
+    { value: '3', label: 'Abril' },
+    { value: '4', label: 'Maio' },
+    { value: '5', label: 'Junho' },
+    { value: '6', label: 'Julho' },
+    { value: '7', label: 'Agosto' },
+    { value: '8', label: 'Setembro' },
+    { value: '9', label: 'Outubro' },
+    { value: '10', label: 'Novembro' },
+    { value: '11', label: 'Dezembro' },
+  ];
 
 
   useEffect(() => {
@@ -83,20 +97,28 @@ export default function Dashboard() {
     const now = new Date();
     let interval;
 
-    switch (period) {
-        case "today":
-            interval = { start: startOfToday(), end: endOfToday() };
-            break;
-        case "this-week":
-            interval = { start: startOfWeek(now), end: endOfWeek(now) };
-            break;
-        case "this-year":
-            interval = { start: startOfYear(now), end: endOfYear(now) };
-            break;
-        case "this-month":
-        default:
-            interval = { start: startOfMonth(now), end: endOfMonth(now) };
-            break;
+    if (period.startsWith('month-')) {
+        const monthIndex = parseInt(period.split('-')[1], 10);
+        const year = now.getFullYear();
+        const startDate = new Date(year, monthIndex, 1);
+        const endDate = endOfMonth(startDate);
+        interval = { start: startDate, end: endDate };
+    } else {
+        switch (period) {
+            case "today":
+                interval = { start: startOfToday(), end: endOfToday() };
+                break;
+            case "this-week":
+                interval = { start: startOfWeek(now), end: endOfWeek(now) };
+                break;
+            case "this-year":
+                interval = { start: startOfYear(now), end: endOfYear(now) };
+                break;
+            case "this-month":
+            default:
+                interval = { start: startOfMonth(now), end: endOfMonth(now) };
+                break;
+        }
     }
 
     const filteredExternal = externalTickets.filter(t => t.createdAt && isWithinInterval(parseISO(t.createdAt), interval));
@@ -300,6 +322,12 @@ export default function Dashboard() {
                 <SelectItem value="this-week">Esta Semana</SelectItem>
                 <SelectItem value="this-month">Este Mês</SelectItem>
                 <SelectItem value="this-year">Este Ano</SelectItem>
+                <SelectSeparator />
+                {months.map(month => (
+                    <SelectItem key={month.value} value={`month-${month.value}`}>
+                        {month.label}
+                    </SelectItem>
+                ))}
             </SelectContent>
         </Select>
       </PageHeader>
