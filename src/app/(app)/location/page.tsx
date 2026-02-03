@@ -73,16 +73,14 @@ export default function LocationPage() {
       );
     }
   
-    const usersWithTicketsInProgress = visibleUsers.filter(u =>
-      allTickets.some(ticket => {
-        const isUserTicket = ticket.technicianId === u.id;
-        const isActive = ticket.status === 'em andamento';
-        const isCompletedToday = ticket.status === 'concluído' && ticket.updatedAt && isToday(parseISO(ticket.updatedAt));
-        return isUserTicket && (isActive || isCompletedToday);
-      })
+    // FIX: A technician is only "on route" if they have a saved route or an active enRoute ticket.
+    const techniciansOnRoute = visibleUsers.filter(u =>
+      (u.routeOrder && u.routeOrder.length > 0) || allTickets.some(t => t.technicianId === u.id && t.enRoute)
     );
     
-    return usersWithTicketsInProgress.map(u => {
+    return techniciansOnRoute.map(u => {
+      // The rest of the logic remains the same, as it correctly categorizes tickets for the card.
+      // The main issue was displaying technicians who shouldn't be there in the first place.
       const allUserTickets = allTickets.filter(t => {
         if (t.technicianId !== u.id) return false;
         if (t.status === 'em andamento') return true;
