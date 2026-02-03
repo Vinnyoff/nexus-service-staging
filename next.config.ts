@@ -41,6 +41,7 @@ const nextConfig: NextConfig = {
   },
   env: {
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+    NEXT_PUBLIC_GA_ID: process.env.NEXT_PUBLIC_GA_ID,
   }
 };
 
