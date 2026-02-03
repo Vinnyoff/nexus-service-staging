@@ -50,7 +50,8 @@ export default function LocationPage() {
         unsubscribes.forEach(unsub => unsub())
         clearTimeout(timer);
     };
-  }, [loading]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const techniciansOnRoute = useMemo(() => {
     if (!user) return [];
