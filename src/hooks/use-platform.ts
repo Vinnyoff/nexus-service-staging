@@ -8,9 +8,13 @@ export function usePlatform() {
   const [platform, setPlatform] = useState<Platform>('web');
 
   useEffect(() => {
-    if (Capacitor.isNativePlatform()) {
-        setPlatform(Capacitor.getPlatform());
-    }
+    // Simulating Android environment for testing
+    setPlatform('android');
+
+    // Original logic:
+    // if (Capacitor.isNativePlatform()) {
+    //     setPlatform(Capacitor.getPlatform());
+    // }
   }, []);
 
   return platform;
