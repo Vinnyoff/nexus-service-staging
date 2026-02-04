@@ -25,11 +25,8 @@ export function BottomNavLinks() {
     ? permittedItems.filter(item => mobilePrefs[item.mobileKey] !== false)
     : permittedItems;
 
-  // Fallback to first 5 permitted items if preferences result in an empty list
+  // Fallback to permitted items if preferences result in an empty list
   let finalNavItems = preferredItems.length > 0 ? preferredItems : permittedItems;
-
-  // Limit to 5 items for the bottom bar.
-  finalNavItems = finalNavItems.slice(0, 5);
 
   return (
     <div className="grid h-16" style={{ gridTemplateColumns: `repeat(${finalNavItems.length > 0 ? finalNavItems.length : 1}, minmax(0, 1fr))` }}>
