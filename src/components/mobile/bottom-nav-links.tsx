@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -29,7 +30,7 @@ export function BottomNavLinks() {
   let finalNavItems = preferredItems.length > 0 ? preferredItems : permittedItems;
 
   return (
-    <div className="grid h-16" style={{ gridTemplateColumns: `repeat(${finalNavItems.length > 0 ? finalNavItems.length : 1}, minmax(0, 1fr))` }}>
+    <div className="flex h-16 overflow-x-auto">
       {finalNavItems.map((item) => {
         const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
         return (
@@ -37,7 +38,7 @@ export function BottomNavLinks() {
             key={item.href}
             href={item.href}
             className={cn(
-              "flex flex-col items-center justify-center gap-1 p-2 text-muted-foreground transition-colors hover:bg-muted",
+              "flex flex-1 flex-col items-center justify-center gap-1 p-2 text-muted-foreground transition-colors hover:bg-muted min-w-[80px]",
               isActive && "text-primary"
             )}
           >
