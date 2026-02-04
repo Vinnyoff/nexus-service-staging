@@ -21,20 +21,8 @@ export function NavLinks() {
     return item.roles.includes(user.role);
   }
 
-  let userPrimaryNavItems = primaryNavItems.filter(hasPermission);
-  let userSecondaryNavItems = secondaryNavItems.filter(hasPermission);
-
-  if (isMobile) {
-    const mobilePrefs = user.mobileNavPreferences || {};
-    const mobileVisibleItems = userPrimaryNavItems.filter(item => mobilePrefs[item.mobileKey] !== false);
-    
-    // Use the filtered list for mobile view, but ensure it's not empty. 
-    // Fallback to default if all are disabled.
-    userPrimaryNavItems = mobileVisibleItems.length > 0 ? mobileVisibleItems : userPrimaryNavItems.slice(0,4); // fallback to first 4
-    
-    // Secondary nav is hidden in the bottom bar, but available in the sidebar menu
-    userSecondaryNavItems = secondaryNavItems.filter(hasPermission);
-  }
+  const userPrimaryNavItems = primaryNavItems.filter(hasPermission);
+  const userSecondaryNavItems = secondaryNavItems.filter(hasPermission);
 
 
   const renderItems = (items: typeof primaryNavItems) => {
