@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import { UserNav } from "@/components/user-nav";
 import { BottomNavBar } from '@/components/mobile/bottom-nav-bar';
 import { useAuth } from '@/hooks/use-auth';
+import { PushBoot } from '@/components/push/PushBoot';
 
 export default function MobileAppLayout({ children }: { children: React.ReactNode }) {
     const { user } = useAuth();
@@ -52,14 +53,15 @@ export default function MobileAppLayout({ children }: { children: React.ReactNod
     }, [user]);
 
     return (
-        <div className="flex flex-col h-screen">
+        <div className="flex flex-col h-screen pt-[--safe-area-inset-top]">
+            <PushBoot />
             <header className="flex h-14 items-center shrink-0 gap-4 border-b bg-background px-4">
                 <div className="flex-1 text-lg font-semibold text-foreground">Euroinfo</div>
                 <div className="flex items-center gap-2">
                     <UserNav />
                 </div>
             </header>
-            <main className="flex-1 overflow-y-auto bg-muted/40 p-4 pb-20">
+            <main className="flex-1 overflow-y-auto bg-muted/40 p-4 pb-[calc(4rem+var(--safe-area-inset-bottom))]">
                 {children}
             </main>
             <BottomNavBar />

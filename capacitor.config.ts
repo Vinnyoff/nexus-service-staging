@@ -7,7 +7,12 @@ const config: CapacitorConfig = {
   server: {
     url: 'https://studio--studio-7906776988-e180b.us-central1.hosted.app',
     cleartext: false
-  }
+  },
+  plugins: {
+    PushNotifications: {
+      presentationOptions: ["badge", "sound", "alert"],
+    },
+  },
 };
 
 export default config;

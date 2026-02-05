@@ -40,6 +40,9 @@ body {
     --sidebar-accent: 240 5% 90%;
     --sidebar-accent-foreground: 224 71% 4%;
     --sidebar-ring: 232 38% 30%;
+
+    --safe-area-inset-top: env(safe-area-inset-top, 0px);
+    --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
   }
   .dark {
     --background: 216 48% 8%;
