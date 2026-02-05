@@ -7,14 +7,16 @@ import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { Comment, ExternalTicket, User, Sector, Technician, TechnicalReport } from '@/lib/types';
+import type { Comment, ExternalTicket, User, Sector, Technician, ServiceContract, Checklist, ChecklistTaskState } from '@/lib/types';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
-import { doc, onSnapshot, updateDoc, arrayUnion, collection, getDocs, deleteField } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, arrayUnion, collection, getDocs, deleteField, query, where, limit, addDoc, getDoc } from 'firebase/firestore';
 import { db, storage } from '@/firebase/config';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { sendWhatsappMessage } from '@/lib/services/notification-service';
 import { optimizeImage, optimizeSignature } from '@/lib/image-optimizer';
+import { format, parseISO, addDays } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 export default function ExternalTicketDetailsPage() {
   const params = useParams();
@@ -26,7 +28,7 @@ export default function ExternalTicketDetailsPage() {
   const [ticket, setTicket] = useState<ExternalTicket | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [allSectors, setAllSectors] = useState<Sector[]>([]);
-  const [technicians, setTechnicians] = useState<Technician[]>([]);
+  const [checklists, setChecklists] = useState<Checklist[]>([]);
   const [loading, setLoading] = useState(true);
 
 
@@ -46,15 +48,15 @@ export default function ExternalTicketDetailsPage() {
 
     const fetchRelatedData = async () => {
         try {
-            const [usersSnapshot, sectorsSnapshot, techsSnapshot] = await Promise.all([
+            const [usersSnapshot, sectorsSnapshot, checklistsSnapshot] = await Promise.all([
                 getDocs(collection(db, "users")),
                 getDocs(collection(db, "sectors")),
-                getDocs(collection(db, "technicians"))
+                getDocs(collection(db, "checklists")),
             ]);
             
             setUsers(usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
             setAllSectors(sectorsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sector)));
-            setTechnicians(techsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Technician)));
+            setChecklists(checklistsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Checklist)));
         } catch (error) {
             console.error("Error fetching related data: ", error);
             toast({ variant: 'destructive', title: 'Erro ao carregar dados de suporte' });
@@ -92,26 +94,6 @@ export default function ExternalTicketDetailsPage() {
     }
   };
   
-  const handleStatusChange = async (id: string, status: ExternalTicket['status']) => {
-    const ticketRef = doc(db, "external-tickets", id);
-    try {
-      await updateDoc(ticketRef, {
-        status,
-        updatedAt: new Date().toISOString(),
-      });
-      toast({ title: 'Status do Chamado Atualizado!' });
-      if (status === 'concluído') {
-        router.back();
-      }
-    } catch (error) {
-      console.error(`Error updating status for ticket ${id}:`, error);
-      toast({
-        variant: "destructive",
-        title: "Erro ao atualizar status",
-      });
-    }
-  };
-
   const handleDescriptionChange = async (newDescription: string) => {
     if (!ticket) return;
     const ticketRef = doc(db, "external-tickets", ticket.id);
@@ -128,22 +110,41 @@ export default function ExternalTicketDetailsPage() {
     if (!ticket || !user) return;
     const ticketRef = doc(db, "external-tickets", ticket.id);
     try {
+        const assignedUser = users.find(u => u.id === technicianId);
+        const sector = allSectors.find(s => s.id === ticket.sectorId);
+        const sectorGroupId = sector?.whatsappGroupId;
+        
         await updateDoc(ticketRef, {
             technicianId: technicianId,
             status: 'em andamento',
             updatedAt: new Date().toISOString(),
         });
-        const assignedTechnician = technicians.find(t => t.id === technicianId);
-        const techUser = users.find(u => u.id === assignedTechnician?.userId);
         
-        if (techUser?.phone) {
-            const message = `*Novo Chamado Atribuído no Nexus Service!*\n\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Prioridade:* ${ticket.type}\n*Atribuído por:* ${user.name}`;
-            await sendWhatsappMessage(techUser.phone, message);
+        let message = `⚠️ Novo Chamado Criado ⚠️\n\n`
+          + `*Cliente:* ${ticket.client.name}\n`
+          + `*Contato:* ${ticket.client.phone || 'N/A'}\n`
+          + `*Solicitante:* ${ticket.requesterName || 'N/A'}\n`
+          + `*Endereço:* ${ticket.client.address || 'N/A'}\n\n`
+          + `*Descrição:* ${ticket.description}\n\n`
+          + `*Tipo:* ${ticket.type}`;
+
+        if (ticket.type === 'contrato' && ticket.priority) {
+            message += `\n*Prioridade do Contrato:* 🚨${ticket.priority}`;
+        }
+        
+        message += `\n*Atribuído por:* ${user.name}\n\n`
+                 + `*Status:* Em andamento por ${assignedUser?.name}`;
+
+        if (assignedUser?.phone) {
+            await sendWhatsappMessage(assignedUser.phone, message, assignedUser.id, `/external-tickets/${ticket.id}`);
+        }
+        if (sectorGroupId) {
+            await sendWhatsappMessage(sectorGroupId, message);
         }
 
         toast({
             title: 'Chamado Atribuído!',
-            description: `Chamado #${ticket.id.substring(0,4)} atribuído a ${assignedTechnician?.name || 'técnico'}.`
+            description: `Chamado #${ticket.id.substring(0,4)} atribuído a ${assignedUser?.name || 'usuário'}.`
         });
     } catch (error) {
         console.error('Error assigning technician:', error);
@@ -152,7 +153,14 @@ export default function ExternalTicketDetailsPage() {
   };
   
 const handleFinalizeTicket = async (id: string, observations: string, photos: File[], signatureDataUrl?: string): Promise<boolean> => {
+    if (!user || !ticket) {
+        toast({ variant: 'destructive', title: 'Erro: Usuário ou chamado não encontrado.'});
+        return false;
+    }
+
+    const finalizationTime = new Date().toISOString();
     const ticketRef = doc(db, "external-tickets", id);
+    
     try {
         const photoURLs = await Promise.all(
             photos.map(async (photo) => {
@@ -163,28 +171,36 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
             })
         );
         
-        let finalSignatureUrl: string | undefined = undefined;
+        let finalSignatureUrl: string | null = null;
         if (signatureDataUrl) {
             finalSignatureUrl = await optimizeSignature(signatureDataUrl);
         }
 
-        const newTechnicalReport: TechnicalReport = {
+        const newTechnicalReport = {
             observations: observations,
             photos: photoURLs,
             ...(finalSignatureUrl && { signature: finalSignatureUrl }),
         };
 
-        const finalizationTime = new Date().toISOString();
-
+        // A lógica de criação do próximo chamado foi movida daqui e movida para um cron job.
+        // A função agora apenas finaliza o chamado atual.
         await updateDoc(ticketRef, {
             status: 'concluído',
             updatedAt: finalizationTime,
+            finalizedBy: user.id,
             technicalReport: newTechnicalReport,
             checkOut: {
                 ticketId: id,
                 timestamp: finalizationTime,
-            }
+            },
         });
+        
+        const sector = allSectors.find(s => s.id === ticket.sectorId);
+        if (sector?.whatsappGroupId) {
+            const finalizationDate = format(parseISO(finalizationTime), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+            const message = `✅ Chamado Concluido ✅\n\n*Cliente:* ${ticket.client.name}\n*Finalizado em:* ${finalizationDate}\n*Status:* Concluído por ${user.name}`;
+            await sendWhatsappMessage(sector.whatsappGroupId, message);
+        }
 
         toast({ title: 'Chamado Finalizado com Sucesso!' });
         router.back();
@@ -195,16 +211,18 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
         toast({
             variant: "destructive",
             title: "Erro ao finalizar chamado",
-            description: "Não foi possível salvar o relatório técnico. Verifique as permissões do Storage e tente novamente.",
+            description: "Não foi possível salvar os dados. Verifique o console para mais detalhes.",
         });
         return false;
     }
 };
 
   
-  const handleReopenTicket = async (id: string) => {
+  const handleReopenTicket = async (id: string, reason: string) => {
+    if (!user) return;
     const ticketRef = doc(db, "external-tickets", id);
     try {
+        await handleAddComment(`**Chamado Reaberto:** ${reason}`);
         await updateDoc(ticketRef, {
             status: 'pendente',
             type: 'retorno',
@@ -213,7 +231,7 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
         });
         toast({
             title: 'Chamado Reaberto com Sucesso!',
-            description: `O chamado #${id} foi movido para pendentes como retorno.`,
+            description: `O chamado #${id.substring(0,4)} foi movido para pendentes como retorno.`,
         });
         router.push('/external-tickets');
     } catch (error) {
@@ -222,17 +240,30 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
     }
   };
 
-  const handleReturnToPending = async (id: string) => {
+  const handleReturnToPending = async (id: string, reason: string) => {
+    if (!user || !ticket) return;
     const ticketRef = doc(db, "external-tickets", id);
     try {
+      await handleAddComment(`**Chamado Devolvido para Pendente:** ${reason}`);
       await updateDoc(ticketRef, {
         status: 'pendente',
         technicianId: deleteField(),
         updatedAt: new Date().toISOString(),
       });
+
+      const sector = allSectors.find(s => s.id === ticket.sectorId);
+      if (sector?.whatsappGroupId) {
+        let message = `↩️ Chamado Devolvido para Pendente ↩️\n\n`
+            + `*Cliente:* ${ticket.client.name}\n`
+            + `*Devolvido por:* ${user.name}\n`
+            + `*Motivo:* ${reason}\n\n`
+            + `O chamado está novamente disponível para ser pego pela equipe.`;
+        await sendWhatsappMessage(sector.whatsappGroupId, message);
+      }
+      
       toast({
         title: 'Chamado Devolvido!',
-        description: `O chamado #${id} retornou para la fila de pendentes.`,
+        description: `O chamado #${id.substring(0,4)} retornou para a fila de pendentes.`,
       });
       router.push('/external-tickets');
     } catch (error) {
@@ -240,11 +271,40 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
       toast({ variant: 'destructive', title: 'Erro ao devolver chamado' });
     }
   };
+  
+    const handleCancelTicket = async (id: string, reason: string) => {
+    if (!user) return;
+    const ticketRef = doc(db, "external-tickets", id);
+    try {
+      const newComment: Comment = {
+        id: `comment-${Date.now()}`,
+        authorId: user.id,
+        content: `**Chamado Cancelado:** ${reason}`,
+        createdAt: new Date().toISOString(),
+      };
+      await updateDoc(ticketRef, {
+        status: 'cancelado',
+        updatedAt: new Date().toISOString(),
+        comments: arrayUnion(newComment)
+      });
+      toast({
+        title: 'Chamado Cancelado!',
+        description: `O chamado #${id.substring(0,4)} foi cancelado.`,
+      });
+      router.push('/external-tickets');
+    } catch (error) {
+      console.error("Error cancelling ticket: ", error);
+      toast({ variant: 'destructive', title: 'Erro ao cancelar chamado' });
+    }
+  };
 
   const handleAssignTicketToCurrentUser = async () => {
     if (!ticket || !user) return;
 
     const ticketRef = doc(db, "external-tickets", ticket.id);
+    const sector = allSectors.find(s => s.id === ticket.sectorId);
+    const sectorGroupId = sector?.whatsappGroupId;
+
     try {
       await updateDoc(ticketRef, {
         technicianId: user.id,
@@ -252,9 +312,14 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
         updatedAt: new Date().toISOString(),
       });
       
+      const message = `🏃‍♂️ Chamado em Andamento 🏃‍♂️\n\n*Cliente:* ${ticket.client.name}\n*Status:* Em andamento por ${user.name}`;
+      
+      if (sectorGroupId) {
+        await sendWhatsappMessage(sectorGroupId, message);
+      }
+      
       if (user.phone) {
-        const message = `*Você Pegou um Chamado no Nexus Service!*\n\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Prioridade:* ${ticket.type}`;
-        await sendWhatsappMessage(user.phone, message);
+        await sendWhatsappMessage(user.phone, message, user.id, `/external-tickets/${ticket.id}`);
       }
 
       toast({
@@ -281,6 +346,43 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
     } catch (error) {
         console.error("Error performing check-in:", error);
         toast({ variant: 'destructive', title: 'Erro ao fazer check-in' });
+    }
+  };
+
+  const handleUpdateChecklistTask = async (taskId: string, updates: Partial<ChecklistTaskState>) => {
+    if (!ticket || !ticket.checklist) return;
+
+    const ticketRef = doc(db, "external-tickets", ticket.id);
+    const newChecklistState = ticket.checklist.map(task => 
+      task.taskId === taskId ? { ...task, ...updates } : task
+    );
+
+    try {
+      await updateDoc(ticketRef, {
+        checklist: newChecklistState,
+      });
+      // A UI será atualizada pelo onSnapshot, não é necessário um toast aqui para evitar poluição.
+    } catch (error) {
+      console.error("Error updating checklist task:", error);
+      toast({ variant: 'destructive', title: 'Erro ao salvar checklist' });
+    }
+  };
+  
+  const handleChecklistPhotoUpload = async (file: File, taskId: string): Promise<boolean> => {
+    if (!file) return false;
+
+    try {
+        const optimizedPhoto = await optimizeImage(file);
+        const photoRef = ref(storage, `tickets/${ticketId}/checklists/${taskId}/${Date.now()}-${optimizedPhoto.name}`);
+        await uploadBytes(photoRef, optimizedPhoto);
+        const downloadURL = await getDownloadURL(photoRef);
+        await handleUpdateChecklistTask(taskId, { photo: downloadURL });
+        toast({ title: 'Foto do checklist enviada com sucesso!'});
+        return true;
+    } catch (error) {
+        console.error("Error uploading checklist photo:", error);
+        toast({ variant: 'destructive', title: 'Erro ao enviar foto' });
+        return false;
     }
   };
 
@@ -315,11 +417,16 @@ const handleFinalizeTicket = async (id: string, observations: string, photos: Fi
             onDescriptionChange={handleDescriptionChange}
             onAssignTechnician={handleAssignTechnician}
             onCheckIn={handleCheckIn}
+            onUpdateChecklistTask={handleUpdateChecklistTask}
+            onUploadChecklistPhoto={handleChecklistPhotoUpload}
+            onCancelTicket={handleCancelTicket}
             currentUser={user}
             users={users}
-            allTechnicians={technicians}
             allSectors={allSectors}
+            allChecklists={checklists}
         />
     </>
   );
 }
+
+    

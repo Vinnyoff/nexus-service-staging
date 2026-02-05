@@ -1,11 +1,11 @@
 
 
-import type { ExternalTicket, User, Technician, Sector } from '@/lib/types';
+import type { ExternalTicket, User, Technician, Sector, Checklist, ChecklistTaskState } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Calendar, User as UserIcon, Phone, MapPin, AlertCircle, ExternalLink, MessageSquare, Hand, CheckCircle, MapPinned, Undo, History, Camera, Loader2, Edit, Info, Pencil } from 'lucide-react';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { Calendar, User as UserIcon, Phone, MapPin, AlertCircle, ExternalLink, MessageSquare, Hand, CheckCircle, MapPinned, Undo, History, Camera, Loader2, Edit, Info, Pencil, ListChecks, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '../ui/badge';
 import { Separator } from '../ui/separator';
@@ -21,38 +21,122 @@ import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter, DialogClose } from '../ui/dialog';
 import { SignaturePad } from '../shared/signature-pad';
 import { optimizeImage, optimizeSignature } from '@/lib/image-optimizer';
+import { useDebounce } from '@/hooks/use-debounce';
+import { Checkbox } from '../ui/checkbox';
 
+
+interface ChecklistItemProps {
+    task: ChecklistTaskState;
+    taskModel: { id: string; text: string };
+    disabled: boolean;
+    onUpdate: (taskId: string, updates: Partial<ChecklistTaskState>) => void;
+    onUploadPhoto: (file: File, taskId: string) => Promise<boolean>;
+}
+
+const ChecklistItem: React.FC<ChecklistItemProps> = ({ task, taskModel, disabled, onUpdate, onUploadPhoto }) => {
+    const [observation, setObservation] = useState(task.observation || '');
+    const [isUploading, setIsUploading] = useState(false);
+
+    useDebounce(() => {
+        if (observation !== task.observation) {
+            onUpdate(task.taskId, { observation });
+        }
+    }, 1000, [observation]);
+
+    const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsUploading(true);
+        await onUploadPhoto(file, task.taskId);
+        setIsUploading(false);
+    };
+
+
+    return (
+        <div className="space-y-3 p-3 border rounded-md bg-muted/50">
+            <div className="flex items-start gap-4">
+                <Checkbox
+                    id={`task-${task.taskId}`}
+                    checked={task.completed}
+                    onCheckedChange={(checked) => onUpdate(task.taskId, { completed: !!checked })}
+                    disabled={disabled}
+                    className="mt-1"
+                />
+                <Label htmlFor={`task-${task.taskId}`} className={cn("flex-1", task.completed && "line-through text-muted-foreground")}>
+                    {taskModel.text}
+                </Label>
+            </div>
+            <div className="pl-8 space-y-2">
+                 <Textarea
+                    placeholder="Observação (opcional)"
+                    value={observation}
+                    onChange={(e) => setObservation(e.target.value)}
+                    disabled={disabled}
+                    rows={1}
+                    className="text-xs resize-y min-h-0 h-9"
+                />
+                <div className="flex items-center gap-2">
+                    <Input
+                        id={`photo-${task.taskId}`}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handlePhotoUpload}
+                        disabled={disabled || isUploading}
+                    />
+                     <Label htmlFor={`photo-${task.taskId}`} className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), disabled && "pointer-events-none opacity-50")}>
+                        {isUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2"/> : <Camera className="h-4 w-4 mr-2" />}
+                        {task.photo ? "Alterar Foto" : "Anexar Foto"}
+                    </Label>
+
+                    {task.photo && (
+                         <a href={task.photo} target="_blank" rel="noopener noreferrer" className={cn(buttonVariants({ variant: 'link', size: 'sm' }))}>
+                            Ver Foto
+                        </a>
+                    )}
+                </div>
+            </div>
+        </div>
+    )
+}
 
 interface ExternalTicketDetailsProps {
   ticket: ExternalTicket;
   onAddComment: (commentText: string) => void;
-  onReopenTicket: (ticketId: string) => void;
-  onReturnToPending: (ticketId: string) => void;
+  onReopenTicket: (ticketId: string, reason: string) => void;
+  onReturnToPending: (ticketId: string, reason: string) => void;
+  onCancelTicket: (ticketId: string, reason: string) => void;
   onAssignToMe: () => void;
   onFinalizeTicket: (ticketId: string, observations: string, photos: File[], signature?: string) => Promise<boolean>;
   onDescriptionChange: (newDescription: string) => void;
   onAssignTechnician: (technicianId: string) => void;
   onCheckIn: () => void;
+  onUpdateChecklistTask: (taskId: string, updates: Partial<ChecklistTaskState>) => void;
+  onUploadChecklistPhoto: (file: File, taskId: string) => Promise<boolean>;
   currentUser: User | null;
   users: User[];
-  allTechnicians: Technician[];
   allSectors: Sector[];
+  allChecklists: Checklist[];
 }
 
 export function ExternalTicketDetails({ 
     ticket, 
     onAddComment, 
     onReopenTicket, 
-    onReturnToPending, 
+    onReturnToPending,
+    onCancelTicket,
     onAssignToMe, 
     onFinalizeTicket, 
     onDescriptionChange,
     onAssignTechnician,
     onCheckIn,
+    onUpdateChecklistTask,
+    onUploadChecklistPhoto,
     currentUser, 
     users,
-    allTechnicians,
     allSectors,
+    allChecklists,
 }: ExternalTicketDetailsProps) {
   const [newComment, setNewComment] = useState('');
   const [observations, setObservations] = useState('');
@@ -61,6 +145,8 @@ export function ExternalTicketDetails({
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [descriptionValue, setDescriptionValue] = useState(ticket.description);
   const [selectedTechnician, setSelectedTechnician] = useState('');
+  const [reason, setReason] = useState('');
+  const [cancellationReason, setCancellationReason] = useState('');
   
   const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
   const [isSignatureDialogOpen, setIsSignatureDialogOpen] = useState(false);
@@ -69,6 +155,7 @@ export function ExternalTicketDetails({
 
   const creator = users.find((u) => u.id === ticket.creatorId);
   const assignee = users.find((u) => u.id === ticket.technicianId);
+  const finalizer = users.find((u) => u.id === ticket.finalizedBy);
   const isAssigned = !!ticket.technicianId;
   const isConcluded = ticket.status === 'concluído';
   const isPending = ticket.status === 'pendente';
@@ -76,20 +163,22 @@ export function ExternalTicketDetails({
   const canTakeAction = !isConcluded && !isCancelled;
   const isCurrentUserAssigned = currentUser?.id === ticket.technicianId;
   const hasCheckedIn = !!ticket.checkIn;
+  const checklistModel = ticket.checklistId ? allChecklists.find(c => c.id === ticket.checklistId) : null;
+  const isChecklistDisabled = !hasCheckedIn || !isCurrentUserAssigned || isConcluded;
 
   const canUserIntervene = currentUser && (
     isCurrentUserAssigned ||
     currentUser.role === 'admin' ||
     currentUser.role === 'gerente' ||
-    (currentUser.role === 'encarregado' && currentUser.sectorIds?.includes(ticket.sectorId)) ||
-    (ticket.status === 'concluído') // Allow any technician to reopen
+    (currentUser.role === 'encarregado' && currentUser.sectorIds?.includes(ticket.sectorId))
   );
   
   const canSupervisorManage = currentUser && (currentUser.role === 'admin' || currentUser.role === 'gerente' || currentUser.role === 'encarregado');
+  const canBeCancelled = !isConcluded && !isCancelled;
   
-  const techniciansInSector = useMemo(() => {
-    return allTechnicians.filter(tech => tech.sectorIds && tech.sectorIds.includes(ticket.sectorId));
-  }, [allTechnicians, ticket.sectorId]);
+  const assignableUsers = useMemo(() => {
+    return users.filter(u => (u.role === 'tecnico' || u.role === 'encarregado') && u.sectorIds?.includes(ticket.sectorId));
+  }, [users, ticket.sectorId]);
 
   const getCommentAuthor = (authorId: string) => users.find((u) => u.id === authorId);
   const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
@@ -153,19 +242,28 @@ export function ExternalTicketDetails({
 
 
   const renderAssigneeStatus = () => {
+    if (isConcluded) {
+        const finalizerName = finalizer?.name || assignee?.name || 'Sistema'; // Fallback logic
+        return (
+            <div className="flex items-center text-green-600 dark:text-green-400">
+                <CheckCircle className="mr-2 h-4 w-4" />
+                <span>Finalizado por: {finalizerName} em {format(parseISO(ticket.updatedAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</span>
+            </div>
+        );
+    }
     if (assignee) {
       return (
-        <>
+        <div className="flex items-center">
           <UserIcon className="mr-2 h-4 w-4" />
           <span>Atribuído a: {assignee.name}</span>
-        </>
+        </div>
       );
     }
     return (
-      <>
-        <AlertCircle className="mr-2 h-4 w-4 text-amber-500" />
-        <span className="text-amber-500">Aguardando atribuição</span>
-      </>
+      <div className="flex items-center text-amber-500">
+        <AlertCircle className="mr-2 h-4 w-4" />
+        <span>Aguardando atribuição</span>
+      </div>
     );
   };
 
@@ -272,6 +370,39 @@ export function ExternalTicketDetails({
             )}
           </CardContent>
         </Card>
+        
+        {checklistModel && ticket.checklist && (
+             <Card>
+                <CardHeader>
+                    <CardTitle className='flex items-center'><ListChecks className='mr-2 h-5 w-5'/> Checklist: {checklistModel.name}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                    {isChecklistDisabled && !isConcluded && (
+                        <Alert variant="destructive">
+                            <Info className="h-4 w-4" />
+                            <AlertTitle>Check-in Necessário</AlertTitle>
+                            <AlertDescription>
+                                Você precisa fazer o check-in no cliente para poder preencher o checklist.
+                            </AlertDescription>
+                        </Alert>
+                    )}
+                    {checklistModel.tasks.map(taskModel => {
+                        const taskState = ticket.checklist!.find(t => t.taskId === taskModel.id);
+                        if (!taskState) return null;
+                        return (
+                            <ChecklistItem
+                                key={taskModel.id}
+                                task={taskState}
+                                taskModel={taskModel}
+                                disabled={isChecklistDisabled}
+                                onUpdate={onUpdateChecklistTask}
+                                onUploadPhoto={onUploadChecklistPhoto}
+                            />
+                        )
+                    })}
+                </CardContent>
+            </Card>
+        )}
 
         {isConcluded && ticket.technicalReport && (
           <Card>
@@ -335,7 +466,7 @@ export function ExternalTicketDetails({
                                     {format(new Date(comment.createdAt), 'dd/MM/yy HH:mm', { locale: ptBR })}
                                     </p>
                                 </div>
-                                <p className="text-sm text-muted-foreground">{comment.content}</p>
+                                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{comment.content}</p>
                                 </div>
                             </div>
                             );
@@ -374,13 +505,40 @@ export function ExternalTicketDetails({
           <CardContent className="flex flex-col gap-2">
             {isConcluded ? (
                 canUserIntervene && (
-                    <Button className="w-full" variant="secondary" onClick={() => onReopenTicket(ticket.id)}>
-                        <History className="mr-2 h-4 w-4" /> Abrir Revisão
-                    </Button>
+                     <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                           <Button className="w-full" variant="secondary">
+                               <History className="mr-2 h-4 w-4" /> Abrir Revisão
+                           </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Reabrir Chamado como Revisão</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Por favor, informe o motivo para reabrir este chamado. A justificativa será adicionada aos comentários.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <div className="py-4">
+                                <Label htmlFor="reopen-reason">Justificativa</Label>
+                                <Textarea 
+                                    id="reopen-reason"
+                                    placeholder="Ex: O problema persistiu..."
+                                    value={reason}
+                                    onChange={(e) => setReason(e.target.value)}
+                                />
+                            </div>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => onReopenTicket(ticket.id, reason)} disabled={!reason.trim()}>
+                                    Confirmar e Reabrir
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
                 )
             ) : canTakeAction ? (
               <>
-                {isPending && !isAssigned && currentUser?.role === 'tecnico' && (
+                {isPending && !isAssigned && (currentUser?.role === 'tecnico' || currentUser?.role === 'encarregado') && (
                   <Button className="w-full" onClick={onAssignToMe}>
                       <Hand className="mr-2 h-4 w-4" /> Pegar Chamado
                   </Button>
@@ -459,11 +617,14 @@ export function ExternalTicketDetails({
                                     <AlertDialogHeader>
                                     <AlertDialogTitle>Confirmar Finalização</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                        Você tem certeza que deseja finalizar este atendimento? Esta ação não pode ser desfeita (apenas reaberta como revisão).
+                                        {ticket.checklistId ? 
+                                            "Este chamado possui um checklist. Caso queira revisar, clique em Voltar. Se está pronto para concluir, clique em Confirmar." :
+                                            "Você tem certeza que deseja finalizar este atendimento? Esta ação não pode ser desfeita (apenas reaberta como revisão)."
+                                        }
                                     </AlertDialogDescription>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
-                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                        <AlertDialogCancel>Voltar</AlertDialogCancel>
                                         <AlertDialogAction onClick={handleFinalize}>Confirmar</AlertDialogAction>
                                     </AlertDialogFooter>
                                 </AlertDialogContent>
@@ -482,14 +643,75 @@ export function ExternalTicketDetails({
                         </Alert>
                     )}
                     
-                    <Button variant="destructive" className="w-full" onClick={() => onReturnToPending(ticket.id)}>
-                        <Undo className="mr-2 h-4 w-4" /> Devolver para Pendente
-                    </Button>
+                     <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                           <Button className="w-full" variant="destructive" onClick={() => onReturnToPending(ticket.id, reason)} disabled={!canUserIntervene}>
+                               <Undo className="mr-2 h-4 w-4" /> Devolver para Pendente
+                           </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Devolver Chamado para Pendente</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                   Informe o motivo para devolver este chamado. A justificativa será adicionada como um comentário.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <div className="py-4">
+                                <Label htmlFor="return-reason">Justificativa</Label>
+                                <Textarea 
+                                    id="return-reason"
+                                    placeholder="Ex: Não consegui contato com o cliente."
+                                    value={reason}
+                                    onChange={(e) => setReason(e.target.value)}
+                                />
+                            </div>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => onReturnToPending(ticket.id, reason)} disabled={!reason.trim()}>
+                                    Confirmar e Devolver
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
                   </>
                 )}
               </>
             ) : null}
             {isCancelled && <p className='text-sm text-muted-foreground text-center'>Chamado cancelado. Nenhuma ação disponível.</p>}
+
+            {canBeCancelled && canUserIntervene && (
+                <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                        <Button className="w-full" variant="destructive">
+                            <XCircle className="mr-2 h-4 w-4" /> Cancelar Chamado
+                        </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Cancelar Chamado</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                Informe o motivo do cancelamento. Essa informação será salva nos comentários do chamado.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <div className="py-4">
+                            <Label htmlFor="cancel-reason">Justificativa</Label>
+                            <Textarea 
+                                id="cancel-reason"
+                                placeholder="Ex: Chamado duplicado, criado por engano..."
+                                value={cancellationReason}
+                                onChange={(e) => setCancellationReason(e.target.value)}
+                            />
+                        </div>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel onClick={() => setCancellationReason('')}>Voltar</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => onCancelTicket(ticket.id, cancellationReason)} disabled={!cancellationReason.trim()}>
+                                Confirmar Cancelamento
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            )}
+
           </CardContent>
         </Card>
 
@@ -507,8 +729,8 @@ export function ExternalTicketDetails({
                                 <SelectValue placeholder="Selecione um técnico..." />
                             </SelectTrigger>
                             <SelectContent>
-                                {techniciansInSector.map(tech => (
-                                    <SelectItem key={tech.id} value={tech.id}>{tech.name}</SelectItem>
+                                {assignableUsers.map(user => (
+                                    <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
@@ -533,3 +755,5 @@ export function ExternalTicketDetails({
     </div>
   );
 }
+
+    

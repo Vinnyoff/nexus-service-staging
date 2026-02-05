@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -7,19 +8,19 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Map, Loader2, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
-import type { ExternalTicket, OptimizedRoute, Technician, RouteHistoryEntry } from '@/lib/types';
+import type { ExternalTicket, OptimizedRoute, User, RouteHistoryEntry } from '@/lib/types';
 import { optimizeTechnicianRoutes } from '@/ai/flows/optimize-technician-routes';
 import { OptimizedRouteList } from './optimized-route-list';
-import { doc, updateDoc, getDoc, arrayUnion, onSnapshot, collection } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, arrayUnion } from 'firebase/firestore';
 import { db } from '@/firebase/config';
 import { format } from 'date-fns';
 
 
 interface RouteOptimizerProps {
-    externalTickets: ExternalTicket[];
+    tickets: ExternalTicket[];
 }
 
-export function RouteOptimizer({ externalTickets: initialTickets }: RouteOptimizerProps) {
+export function RouteOptimizer({ tickets }: RouteOptimizerProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
@@ -27,22 +28,6 @@ export function RouteOptimizer({ externalTickets: initialTickets }: RouteOptimiz
   const [optimizedRoute, setOptimizedRoute] = useState<OptimizedRoute | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
-  const [externalTickets, setExternalTickets] = useState<ExternalTicket[]>(initialTickets);
-
-  useEffect(() => {
-    if (!user) return;
-
-    const q = collection(db, 'external-tickets');
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-        const ticketsData = querySnapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() } as ExternalTicket))
-            .filter(ticket => ticket.technicianId === user.id && ticket.status === 'em andamento');
-        setExternalTickets(ticketsData);
-    });
-
-    return () => unsubscribe();
-  }, [user]);
-
 
   const handleOptimizeRoute = () => {
     if (!user) {
@@ -58,7 +43,7 @@ export function RouteOptimizer({ externalTickets: initialTickets }: RouteOptimiz
     setOptimizedRoute(null);
     setIsRouteSaved(false);
 
-    const ticketsToOptimize = externalTickets.filter(ticket => {
+    const ticketsToOptimize = tickets.filter(ticket => {
         const isMyTicket = ticket.technicianId === user.id;
         const isInProgress = ticket.status === 'em andamento';
         const hasAddress = !!ticket.client.address;
@@ -152,10 +137,10 @@ export function RouteOptimizer({ externalTickets: initialTickets }: RouteOptimiz
 
     setIsSaving(true);
     const routeOrder = optimizedRoute.tickets.map(ticket => ticket.id);
-    const technicianRef = doc(db, 'technicians', user.id);
+    const userRef = doc(db, 'users', user.id);
 
     try {
-        await updateDoc(technicianRef, {
+        await updateDoc(userRef, {
             routeOrder: routeOrder,
         });
         toast({
@@ -178,13 +163,13 @@ export function RouteOptimizer({ externalTickets: initialTickets }: RouteOptimiz
   const handleClearRoute = async () => {
     if (!user) return;
     setIsClearing(true);
-    const technicianRef = doc(db, 'technicians', user.id);
+    const userRef = doc(db, 'users', user.id);
     
     try {
-        const techDoc = await getDoc(technicianRef);
-        if (techDoc.exists()) {
-            const techData = techDoc.data() as Technician;
-            const currentRouteOrder = techData.routeOrder;
+        const userDoc = await getDoc(userRef);
+        if (userDoc.exists()) {
+            const userData = userDoc.data() as User;
+            const currentRouteOrder = userData.routeOrder;
 
             // Archive the route before clearing it
             if (currentRouteOrder && currentRouteOrder.length > 0) {
@@ -194,13 +179,13 @@ export function RouteOptimizer({ externalTickets: initialTickets }: RouteOptimiz
                     finishedAt: new Date().toISOString(),
                 };
                 
-                await updateDoc(technicianRef, {
+                await updateDoc(userRef, {
                     routeHistory: arrayUnion(historyEntry),
                     routeOrder: [], // Clear the current route
                 });
             } else {
                  // If there's no current route, just ensure it's cleared.
-                await updateDoc(technicianRef, {
+                await updateDoc(userRef, {
                     routeOrder: [],
                 });
             }
@@ -286,5 +271,3 @@ export function RouteOptimizer({ externalTickets: initialTickets }: RouteOptimiz
     </Card>
   );
 }
-
-    

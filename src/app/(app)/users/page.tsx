@@ -33,23 +33,27 @@ export default function UsersPage() {
   const { user: adminUser } = useAuth();
 
   useEffect(() => {
-    setLoading(true);
-    
     const unsubUsers = onSnapshot(collection(db, "users"), (snapshot) => {
         setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
-    }, () => setUsers([]));
+        if (loading) setLoading(false);
+    }, (error) => {
+        console.error("Error fetching users:", error);
+        setUsers([]);
+        if (loading) setLoading(false);
+    });
 
     const unsubSectors = onSnapshot(collection(db, "sectors"), (snapshot) => {
         setSectors(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sector)));
-    }, () => setSectors([]));
-
-    const timer = setTimeout(() => setLoading(false), 3000);
+    }, (error) => {
+        console.error("Error fetching sectors:", error);
+        setSectors([]);
+    });
 
     return () => {
         unsubUsers();
         unsubSectors();
-        clearTimeout(timer);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   
   const filteredUsers = useMemo(() => {
@@ -89,7 +93,6 @@ export default function UsersPage() {
 
         await setDoc(doc(db, "users", newUserId), newUser);
 
-        setUsers(prev => [newUser, ...prev]);
         setIsDialogOpen(false);
         toast({
             title: "Usuário Criado com Sucesso!",
@@ -109,7 +112,7 @@ export default function UsersPage() {
     }
   };
 
-  const handleUpdateUser = async (userId: string, values: EditUserFormValues) => {
+  const handleUpdateUser = async (userId: string, values: EditUserFormValues, newStatus: UserStatus) => {
     const userDocRef = doc(db, "users", userId);
     try {
       const updateData: Partial<User> = {
@@ -117,18 +120,14 @@ export default function UsersPage() {
         phone: values.phone,
         role: values.role,
         sectorIds: values.role === 'encarregado' ? values.sectorIds : [],
+        status: newStatus,
         updatedAt: new Date().toISOString(),
         euroInfoId: values.euroInfoId,
         rondoInfoId: values.rondoInfoId,
       };
 
-      await updateDoc(userDocRef, updateData);
+      await updateDoc(userDocRef, updateData as { [key: string]: any });
 
-      setUsers(prevUsers => prevUsers.map(u => 
-        u.id === userId 
-          ? { ...u, ...updateData } 
-          : u
-      ));
       toast({ title: "Usuário atualizado com sucesso!" });
       return true;
     } catch (error) {
@@ -138,21 +137,6 @@ export default function UsersPage() {
     }
   };
   
-  const handleStatusChange = async (user: User, newStatus: UserStatus) => {
-    const userRef = doc(db, "users", user.id);
-    try {
-        await updateDoc(userRef, { status: newStatus });
-        setUsers(prev => prev.map(u => u.id === user.id ? { ...u, status: newStatus } : u));
-        toast({
-            title: "Status do Usuário Atualizado!",
-            description: `O usuário ${user.name} foi ${newStatus === 'active' ? 'reativado' : 'desativado'}.`,
-        });
-    } catch (error) {
-        console.error("Error updating user status:", error);
-        toast({ variant: "destructive", title: "Erro ao atualizar status" });
-    }
-  };
-
   const handleUpdatePermissions = async (userId: string, permissions: Partial<ModulePermissions>) => {
     const userDocRef = doc(db, "users", userId);
     try {
@@ -160,11 +144,6 @@ export default function UsersPage() {
             permissions,
             updatedAt: new Date().toISOString(),
         });
-        setUsers(prevUsers => prevUsers.map(u => 
-            u.id === userId 
-                ? { ...u, permissions: { ...u.permissions, ...permissions } } 
-                : u
-        ));
         toast({ title: "Permissões atualizadas com sucesso!" });
     } catch (error) {
         console.error("Error updating permissions:", error);
@@ -218,10 +197,8 @@ export default function UsersPage() {
         <UsersTable 
           data={filteredUsers} 
           sectors={sectors} 
-          onDataChange={setUsers}
           onSavePermissions={handleUpdatePermissions}
           onSaveUser={handleUpdateUser}
-          onStatusChange={handleStatusChange}
         />
       )}
     </>

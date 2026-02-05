@@ -1,4 +1,5 @@
 
+
 "use client"
 
 import * as React from "react"
@@ -31,7 +32,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import type { ExternalTicket, Sector, Technician, User } from "@/lib/types"
+import type { ExternalTicket, Sector, User } from "@/lib/types"
 import { format, parseISO } from "date-fns"
 import { useRouter } from "next/navigation"
 import { Badge } from "../ui/badge"
@@ -68,7 +69,7 @@ const ActionsCell = ({ row }: { row: any }) => {
   )
 }
 
-const getColumns = (sectors: Sector[], technicians: Technician[], users: User[]): ColumnDef<ExternalTicket>[] => [
+const getColumns = (sectors: Sector[], users: User[]): ColumnDef<ExternalTicket>[] => [
   {
     accessorKey: "id",
     header: "ID",
@@ -96,9 +97,8 @@ const getColumns = (sectors: Sector[], technicians: Technician[], users: User[])
     accessorKey: "technicianId",
     header: "Técnico",
     cell: ({ row }) => {
-      const technicianId = row.getValue("technicianId") as string;
-      const technician = technicians.find(t => t.id === technicianId) || users.find(u => u.id === technicianId);
-      return <div>{technician?.name || 'N/A'}</div>
+      const user = users.find(u => u.id === row.getValue("technicianId"));
+      return <div>{user?.name || 'N/A'}</div>
     },
   },
    {
@@ -148,7 +148,6 @@ const getColumns = (sectors: Sector[], technicians: Technician[], users: User[])
 
 interface HistoryTableProps {
     data: ExternalTicket[];
-    technicians: Technician[];
     sectors: Sector[];
     users: User[];
     columnVisibility: VisibilityState;
@@ -168,7 +167,6 @@ const columnMapping: Record<string, string> = {
 
 export function HistoryTable({ 
     data, 
-    technicians, 
     sectors, 
     users, 
     columnVisibility,
@@ -178,7 +176,7 @@ export function HistoryTable({
       { id: "updatedAt", desc: true }
   ])
 
-  const columns = React.useMemo(() => getColumns(sectors, technicians, users), [sectors, technicians, users]);
+  const columns = React.useMemo(() => getColumns(sectors, users), [sectors, users]);
 
   const table = useReactTable({
     data,
@@ -202,7 +200,7 @@ export function HistoryTable({
     let activeColumns = table.getVisibleLeafColumns().map(c => c.id);
     
     return data.map(ticket => {
-        const technician = technicians.find(t => t.id === ticket.technicianId) || users.find(u => u.id === ticket.technicianId);
+        const technician = users.find(u => u.id === ticket.technicianId);
         const sector = sectors.find(s => s.id === ticket.sectorId);
         
         const row: Record<string, any> = {};

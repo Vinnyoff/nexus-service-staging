@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect } from "react";
@@ -83,10 +82,18 @@ export default function ClientsPage() {
     }
   };
 
-  const handleUpdateClient = async (clientId: string, values: EditClientFormValues) => {
+  const handleUpdateClient = async (clientId: string, values: EditClientFormValues, newStatus: 'active' | 'inactive') => {
     const clientRef = doc(db, "clients", clientId);
     try {
-        const updatedData = { ...values };
+        const updatedData: { [key: string]: any } = { ...values, status: newStatus };
+        
+        // Firestore doesn't allow 'undefined' values. We need to remove them before updating.
+        Object.keys(updatedData).forEach(key => {
+            if (updatedData[key] === undefined) {
+                delete updatedData[key];
+            }
+        });
+
         await updateDoc(clientRef, updatedData);
         toast({ title: "Cliente atualizado com sucesso!" });
         return true;
@@ -97,23 +104,6 @@ export default function ClientsPage() {
     }
   };
   
-  const handleStatusChange = async (client: Client, newStatus: 'active' | 'inactive') => {
-    const clientRef = doc(db, "clients", client.id);
-    try {
-        await updateDoc(clientRef, { status: newStatus });
-        toast({
-            title: "Status do Cliente Atualizado!",
-            description: `O cliente ${client.name} foi ${newStatus === 'active' ? 'reativado' : 'desativado'}.`,
-        });
-    } catch (error) {
-        console.error("Error updating client status: ", error);
-        toast({
-            variant: "destructive",
-            title: "Erro ao atualizar status",
-            description: "Ocorreu um erro ao alterar o status do cliente.",
-        });
-    }
-  };
 
   return (
     <>
@@ -140,7 +130,6 @@ export default function ClientsPage() {
       ) : (
         <ClientsTable 
           data={clients} 
-          onStatusChange={handleStatusChange}
           onUpdateClient={handleUpdateClient}
         />
       )}

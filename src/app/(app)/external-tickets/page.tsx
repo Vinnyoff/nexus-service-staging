@@ -1,19 +1,19 @@
 
 "use client"
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Loader2, LayoutDashboard, List, RefreshCcw } from "lucide-react";
+import { PlusCircle, Loader2, LayoutDashboard, List, RefreshCcw, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { NewExternalTicketForm, NewExternalTicketFormValues } from "@/components/external-tickets/new-external-ticket-form";
-import { ExternalTicket, Sector, User, Technician } from "@/lib/types";
+import { ExternalTicket, Sector, User, Technician, Comment, Checklist, ChecklistTaskState } from "@/lib/types";
 import { useAuth } from "@/hooks/use-auth";
 import { ExternalTicketCard } from "@/components/external-tickets/external-ticket-card";
 import { ExternalTicketsFilterBar, StatusFilter } from "@/components/external-tickets/external-tickets-filter-bar";
 import { useToast } from "@/hooks/use-toast";
-import { addDoc, collection, getDocs, doc, updateDoc, deleteField, writeBatch, onSnapshot } from "firebase/firestore";
+import { addDoc, collection, getDocs, doc, updateDoc, deleteField, writeBatch, onSnapshot, arrayUnion, getDoc } from "firebase/firestore";
 import { db } from "@/firebase/config";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { isToday, parseISO, isPast } from "date-fns";
@@ -21,18 +21,23 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ExternalTicketsTable } from "@/components/external-tickets/external-tickets-table";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { sendWhatsappMessage } from "@/lib/services/notification-service";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 
 type ConfirmationState = {
     isOpen: boolean;
     action: 'reopen' | 'cancel' | 'take' | null;
     ticket: ExternalTicket | null;
+    reason?: string;
 };
 
 const STATUS_FILTER_STORAGE_KEY = 'external_tickets_status_filter';
 const VIEW_MODE_STORAGE_KEY = 'external_tickets_view_mode';
 
 type ViewMode = 'kanban' | 'list';
+const TICKETS_PER_PAGE = 20;
 
 export default function ExternalTicketsPage() {
   const [isNewTicketDialogOpen, setIsNewTicketDialogOpen] = useState(false);
@@ -40,11 +45,12 @@ export default function ExternalTicketsPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
+  const [checklists, setChecklists] = useState<Checklist[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
-  const [confirmation, setConfirmation] = useState<ConfirmationState>({ isOpen: false, action: null, ticket: null });
+  const [confirmation, setConfirmation] = useState<ConfirmationState>({ isOpen: false, action: null, ticket: null, reason: '' });
   const isMobile = useIsMobile();
   const [viewMode, setViewMode] = useState<ViewMode>('kanban');
 
@@ -52,6 +58,7 @@ export default function ExternalTicketsPage() {
   const [pullDistance, setPullDistance] = useState(0);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => {
     if (typeof window !== 'undefined') {
@@ -75,6 +82,17 @@ export default function ExternalTicketsPage() {
 
   useEffect(() => {
     setLoading(true);
+    
+    let loadedCount = 0;
+    const totalCollections = 5;
+
+    const onCollectionLoad = () => {
+        loadedCount++;
+        if (loadedCount === totalCollections) {
+            setLoading(false);
+        }
+    };
+    
     const unsubUsers = onSnapshot(collection(db, "users"), (snapshot) => {
         const usersData = snapshot.docs.map(doc => {
             const userData = { id: doc.id, ...doc.data() } as User;
@@ -86,38 +104,55 @@ export default function ExternalTicketsPage() {
             return userData;
         });
         setUsers(usersData);
-    }, () => setUsers([]));
+        onCollectionLoad();
+    }, () => { setUsers([]); onCollectionLoad(); });
     
     const unsubSectors = onSnapshot(collection(db, "sectors"), (snapshot) => {
         setSectors(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sector)));
-    }, () => setSectors([]));
+        onCollectionLoad();
+    }, () => { setSectors([]); onCollectionLoad(); });
     
     const unsubTechs = onSnapshot(collection(db, "technicians"), (snapshot) => {
         setTechnicians(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Technician)));
-    }, () => setTechnicians([]));
+        onCollectionLoad();
+    }, () => { setTechnicians([]); onCollectionLoad(); });
 
     const unsubTickets = onSnapshot(collection(db, "external-tickets"), (snapshot) => {
         setTickets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ExternalTicket)));
         setPullDistance(0);
-    }, () => setTickets([]));
+        onCollectionLoad();
+    }, () => { setTickets([]); onCollectionLoad(); });
+    
+    const unsubChecklists = onSnapshot(collection(db, "checklists"), (snapshot) => {
+        setChecklists(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Checklist)));
+        onCollectionLoad();
+    }, () => { setChecklists([]); onCollectionLoad(); });
 
     // Failsafe to turn off loading
-    const timer = setTimeout(() => setLoading(false), 3000);
+    const timer = setTimeout(() => {
+      if (loading) setLoading(false);
+    }, 5000);
 
     return () => {
         unsubUsers();
         unsubSectors();
         unsubTechs();
         unsubTickets();
+        unsubChecklists();
         clearTimeout(timer);
     };
-}, []);
+  }, []);
 
   
   // Persist status filter to session storage
   useEffect(() => {
     sessionStorage.setItem(STATUS_FILTER_STORAGE_KEY, statusFilter);
   }, [statusFilter]);
+
+  // Reset page when any filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, technicianFilter, sectorFilter, contractOnly, myTicketsOnly, searchQuery]);
   
   // Persist view mode
   useEffect(() => {
@@ -176,10 +211,10 @@ export default function ExternalTicketsPage() {
   };
 
 
-  const handleAddTicket = async (values: NewExternalTicketFormValues & { type: 'padrão' | 'contrato' | 'urgente' | 'agendado' | 'retorno', slaExpiresAt?: string }) => {
+  const handleAddTicket = async (values: NewExternalTicketFormValues & { type: 'padrão' | 'contrato' | 'urgente' | 'agendado' | 'retorno', slaExpiresAt?: string, priority?: string }) => {
     if (!user) return;
   
-    const newTicketData: Omit<ExternalTicket, 'id'> = {
+    const newTicketData: Partial<ExternalTicket> = {
       client: {
         id: '', // Will be filled if clientId exists
         name: values.clientName,
@@ -190,9 +225,10 @@ export default function ExternalTicketsPage() {
       creatorId: user.id,
       description: values.description,
       type: values.type,
-      status: 'pendente', // Default status
+      status: 'pendente' as const, // Default status
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      ...(values.priority && { priority: values.priority as any }),
     };
   
     if (values.clientId) {
@@ -221,19 +257,54 @@ export default function ExternalTicketsPage() {
     if (values.slaExpiresAt) {
       newTicketData.slaExpiresAt = values.slaExpiresAt;
     }
+
+    if (values.checklistId) {
+      const selectedChecklist = checklists.find(c => c.id === values.checklistId);
+      if(selectedChecklist) {
+          newTicketData.checklistId = values.checklistId;
+          newTicketData.checklist = selectedChecklist.tasks.map(task => ({ taskId: task.id, completed: false, observation: '', photo: '' }));
+      }
+    }
   
     try {
       const docRef = await addDoc(collection(db, "external-tickets"), newTicketData);
       
-      if (newTicketData.technicianId) {
-        const assignedTechnician = technicians.find(t => t.id === newTicketData.technicianId);
-        const techUser = users.find(u => u.id === assignedTechnician?.userId);
-        if (techUser?.phone) {
-            const message = `*Novo Chamado Atribuído no Nexus Service!*\n\n*Cliente:* ${newTicketData.client.name}\n*Contato:* ${newTicketData.client.phone || 'N/A'}\n*Endereço:* ${newTicketData.client.address || 'N/A'}\n*Solicitante:* ${newTicketData.requesterName || 'N/A'}\n\n*Descrição:* ${newTicketData.description}\n\n*Prioridade:* ${newTicketData.type}\n*Atribuído por:* ${user.name}`;
-            await sendWhatsappMessage(techUser.phone, message);
-        }
+      const sector = sectors.find(s => s.id === newTicketData.sectorId);
+      const sectorGroupId = sector?.whatsappGroupId;
+      
+      let messageStatusText = `*Status:* ${newTicketData.status === 'pendente' ? 'Pendente' : `Em andamento por ${user.name}`}`;
+      const assignedTechnician = technicians.find(t => t.id === newTicketData.technicianId);
+
+      if (newTicketData.technicianId && assignedTechnician) {
+          messageStatusText = `*Status:* Em andamento por ${assignedTechnician.name}`;
       }
       
+      let message = `⚠️ Novo Chamado Criado ⚠️\n\n`
+          + `*Cliente:* ${newTicketData.client.name}\n`
+          + `*Contato:* ${newTicketData.client.phone || 'N/A'}\n`
+          + `*Solicitante:* ${newTicketData.requesterName || 'N/A'}\n`
+          + `*Endereço:* ${newTicketData.client.address || 'N/A'}\n\n`
+          + `*Descrição:* ${newTicketData.description}\n\n`
+          + `*Tipo:* ${newTicketData.type}`;
+
+      if (newTicketData.type === 'contrato' && newTicketData.priority) {
+        message += `\n*Prioridade do Contrato:* 🚨${newTicketData.priority}`;
+      }
+
+      message += `\n*Atribuído por:* ${user.name}\n\n`
+               + `${messageStatusText}`;
+
+      if (newTicketData.technicianId) {
+        const techUser = users.find(u => u.id === assignedTechnician?.userId);
+        if (techUser?.phone) {
+            await sendWhatsappMessage(techUser.phone, message, techUser.id, `/external-tickets/${docRef.id}`);
+        }
+      }
+      // Sempre notifica o grupo, se houver
+      if (sectorGroupId) {
+          await sendWhatsappMessage(sectorGroupId, message);
+      }
+
       await addDoc(collection(db, "system-logs"), {
         userId: user.id,
         event: 'EXTERNAL_TICKET_CREATED',
@@ -257,6 +328,8 @@ export default function ExternalTicketsPage() {
         title: "Erro ao criar chamado",
         description: "Ocorreu um erro ao salvar os dados. Tente novamente.",
       });
+      // Re-throw to inform the form
+      throw error;
     }
   }
   
@@ -285,17 +358,20 @@ export default function ExternalTicketsPage() {
     if (!user) return;
     const ticketRef = doc(db, "external-tickets", id);
     try {
-        await updateDoc(ticketRef, {
-            technicianId: user.id,
-            status: 'em andamento',
-            updatedAt: new Date().toISOString(),
-        });
-        
-        if (user.phone) {
-            const ticket = tickets.find(t => t.id === id);
-            if (ticket) {
-              const message = `*Você Pegou um Chamado no Nexus Service!*\n\n*Cliente:* ${ticket.client.name}\n*Contato:* ${ticket.client.phone || 'N/A'}\n*Endereço:* ${ticket.client.address || 'N/A'}\n*Solicitante:* ${ticket.requesterName || 'N/A'}\n\n*Descrição:* ${ticket.description}\n\n*Prioridade:* ${ticket.type}`;
-              await sendWhatsappMessage(user.phone, message);
+        const ticket = tickets.find(t => t.id === id);
+        if (ticket) {
+            await updateDoc(ticketRef, {
+                technicianId: user.id,
+                status: 'em andamento',
+                updatedAt: new Date().toISOString(),
+            });
+            
+            const sector = sectors.find(s => s.id === ticket.sectorId);
+            const sectorGroupId = sector?.whatsappGroupId;
+            
+            const message = `🏃‍♂️ Chamado em Andamento 🏃‍♂️\n\n*Cliente:* ${ticket.client.name}\n*Status:* Em andamento por ${user.name}`;
+            if (sectorGroupId) {
+                await sendWhatsappMessage(sectorGroupId, message);
             }
         }
 
@@ -314,7 +390,7 @@ export default function ExternalTicketsPage() {
 
     const enRouteTime = new Date().toISOString();
 
-    const ticketsToUpdate = tickets.map(t => {
+    tickets.forEach(t => {
         if (t.technicianId === user.id) {
             const isTarget = t.id === ticketId;
             if (t.enRoute && !isTarget) {
@@ -327,7 +403,6 @@ export default function ExternalTicketsPage() {
                 targetTicket = { ...t, enRoute: true, enRouteAt: enRouteTime };
             }
         }
-        return t;
     });
 
     try {
@@ -344,14 +419,23 @@ export default function ExternalTicketsPage() {
     }
 };
 
-  const handleReopenTicket = async (id: string) => {
+  const handleReopenTicket = async (id: string, reason: string) => {
+    if (!user) return;
     const ticketRef = doc(db, "external-tickets", id);
     try {
+      const comment: Comment = {
+        id: `comment-${Date.now()}`,
+        authorId: user.id,
+        content: `**Chamado Reaberto:** ${reason}`,
+        createdAt: new Date().toISOString(),
+      };
+
       await updateDoc(ticketRef, {
         status: 'pendente',
         type: 'retorno',
         technicianId: deleteField(),
         updatedAt: new Date().toISOString(),
+        comments: arrayUnion(comment)
       });
       toast({
         title: 'Chamado Reaberto com Sucesso!',
@@ -367,131 +451,194 @@ export default function ExternalTicketsPage() {
     }
   };
   
-  const handleCancelTicket = async (id: string) => {
-    await handleStatusChange(id, 'cancelado');
-    toast({
-      title: 'Chamado Cancelado',
-      description: `O chamado #${id.substring(0,4)} foi cancelado.`,
-    });
+  const handleCancelTicket = async (id: string, reason: string) => {
+    if (!user) return;
+    const ticketRef = doc(db, "external-tickets", id);
+    try {
+        const comment: Comment = {
+            id: `comment-${Date.now()}`,
+            authorId: user.id,
+            content: `**Chamado Cancelado:** ${reason}`,
+            createdAt: new Date().toISOString(),
+        };
+
+        await updateDoc(ticketRef, {
+            status: 'cancelado',
+            updatedAt: new Date().toISOString(),
+            comments: arrayUnion(comment),
+        });
+
+        toast({
+            title: 'Chamado Cancelado',
+            description: `O chamado #${id.substring(0,4)} foi cancelado.`,
+        });
+
+    } catch (error) {
+        console.error("Error cancelling ticket: ", error);
+        toast({
+            variant: "destructive",
+            title: "Erro ao cancelar chamado",
+            description: "Não foi possível atualizar o chamado. Tente novamente.",
+        });
+    }
   };
 
   const handleConfirmAction = (action: 'reopen' | 'cancel' | 'take', ticket: ExternalTicket) => {
-    setConfirmation({ isOpen: true, action, ticket });
+    setConfirmation({ isOpen: true, action, ticket, reason: '' });
   };
 
   const executeConfirmedAction = async () => {
     if (!confirmation.ticket || !confirmation.action) return;
 
-    const { ticket, action } = confirmation;
+    const { ticket, action, reason } = confirmation;
 
-    if (action === 'reopen') {
-        await handleReopenTicket(ticket.id);
-    } else if (action === 'cancel') {
-        await handleCancelTicket(ticket.id);
+    if (action === 'reopen' || action === 'cancel') {
+        if (!reason) {
+            toast({ variant: 'destructive', title: 'Justificativa obrigatória' });
+            return;
+        }
+        if (action === 'reopen') {
+            await handleReopenTicket(ticket.id, reason);
+        } else {
+            await handleCancelTicket(ticket.id, reason);
+        }
     } else if (action === 'take') {
         await handleAssignTicket(ticket.id);
     }
 
-
     setConfirmation({ isOpen: false, action: null, ticket: null });
   };
   
-  const getConfirmationMessage = () => {
+  const getConfirmationContent = () => {
     switch (confirmation.action) {
-      case 'reopen': return 'reabrir';
-      case 'cancel': return 'cancelar';
-      case 'take': return 'pegar';
-      default: return 'executar esta ação';
+      case 'reopen': return (
+        <>
+            <AlertDialogTitle>Reabrir Chamado</AlertDialogTitle>
+            <AlertDialogDescription>
+                Por favor, informe o motivo para reabrir este chamado. A justificativa será adicionada aos comentários.
+            </AlertDialogDescription>
+            <div className="py-4">
+                <Label htmlFor="reopen-reason">Justificativa</Label>
+                <Textarea 
+                    id="reopen-reason"
+                    placeholder="Ex: O problema persistiu..."
+                    value={confirmation.reason}
+                    onChange={(e) => setConfirmation(c => ({ ...c, reason: e.target.value }))}
+                />
+            </div>
+        </>
+      );
+      case 'cancel': return (
+        <>
+            <AlertDialogTitle>Confirmar Cancelamento</AlertDialogTitle>
+            <AlertDialogDescription>
+                Informe o motivo do cancelamento. Essa informação será salva nos comentários do chamado.
+            </AlertDialogDescription>
+            <div className="py-4">
+                <Label htmlFor="cancel-reason">Justificativa</Label>
+                <Textarea 
+                    id="cancel-reason"
+                    placeholder="Ex: Cliente solicitou o cancelamento..."
+                    value={confirmation.reason}
+                    onChange={(e) => setConfirmation(c => ({ ...c, reason: e.target.value }))}
+                />
+            </div>
+        </>
+      );
+       case 'take': return (
+        <>
+            <AlertDialogTitle>Confirmar Atribuição</AlertDialogTitle>
+            <AlertDialogDescription>
+                Você tem certeza que deseja pegar este chamado?
+            </AlertDialogDescription>
+        </>
+      );
+      default: return null;
     }
   };
 
-  const filteredTickets = tickets.filter(ticket => {
-    // Role-based visibility pre-filter
-    if (user?.role === 'encarregado') {
-        if (!user.sectorIds?.includes(ticket.sectorId)) return false;
-    } else if (user?.role === 'tecnico') {
-        // Technicians can see all tickets within their assigned sectors.
-        if (!user.sectorIds?.includes(ticket.sectorId)) {
+  const filteredAndSortedTickets = useMemo(() => {
+    const filtered = tickets.filter(ticket => {
+        if (user?.role === 'encarregado' || user?.role === 'tecnico') {
+            if (!user.sectorIds?.includes(ticket.sectorId)) return false;
+        }
+        
+        const query = searchQuery.toLowerCase();
+        if (query && 
+            !ticket.client.name.toLowerCase().includes(query) &&
+            !ticket.description.toLowerCase().includes(query) &&
+            !(ticket.requesterName && ticket.requesterName.toLowerCase().includes(query))
+        ) {
             return false;
         }
-    }
-    
-    // Search Query Filter
-    const query = searchQuery.toLowerCase();
-    if (query && 
-        !ticket.client.name.toLowerCase().includes(query) &&
-        !ticket.description.toLowerCase().includes(query) &&
-        !(ticket.requesterName && ticket.requesterName.toLowerCase().includes(query))
-    ) {
-        return false;
-    }
 
-    // UI Filter
-    if (statusFilter !== 'all' && ticket.status !== statusFilter) {
-      return false;
-    }
-    if (technicianFilter !== 'all' && ticket.technicianId !== technicianFilter) {
-        return false;
-    }
-    if (sectorFilter !== 'all' && ticket.sectorId !== sectorFilter) {
-        return false;
-    }
-    if (contractOnly && ticket.type !== 'contrato') {
-      return false;
-    }
-    if (myTicketsOnly && user && ticket.technicianId !== user.id) {
-      return false;
-    }
-    return true;
-  }).sort((a, b) => {
-    // If filtering by 'concluído', sort by update date (most recent first)
-    if (statusFilter === 'concluído') {
-      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-    }
+        if (statusFilter !== 'all' && ticket.status !== statusFilter) {
+          return false;
+        }
+        if (technicianFilter !== 'all' && ticket.technicianId !== technicianFilter) {
+            return false;
+        }
+        if (sectorFilter !== 'all' && ticket.sectorId !== sectorFilter) {
+            return false;
+        }
+        if (contractOnly && ticket.type !== 'contrato') {
+          return false;
+        }
+        if (myTicketsOnly && user && ticket.technicianId !== user.id) {
+          return false;
+        }
+        return true;
+    });
+
+    return filtered.sort((a, b) => {
+        if (statusFilter === 'concluído' || statusFilter === 'all') {
+            return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        }
+
+        if (statusFilter === 'em andamento' && user?.routeOrder && user.routeOrder.length > 0) {
+            const routeOrder = user.routeOrder;
+            const indexA = routeOrder.indexOf(a.id);
+            const indexB = routeOrder.indexOf(b.id);
       
-    // Default priority-based sorting for other statuses
-    const priorityOrder = {
-      'agendado-atrasado': -1,
-      'agendado-hoje': 0,
-      'retorno': 1,
-      'contrato': 2,
-      'urgente': 3,
-      'padrão': 4,
-      'agendado-futuro': 5,
-    };
+            if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+            if (indexA !== -1) return -1;
+            if (indexB !== -1) return 1;
+        }
 
-    const getPriority = (ticket: ExternalTicket) => {
-      if (ticket.type === 'agendado' && ticket.scheduledTo) {
-          const scheduledDate = parseISO(ticket.scheduledTo);
-          if (isPast(scheduledDate) && !isToday(scheduledDate)) {
-              return priorityOrder['agendado-atrasado'];
-          }
-          if (isToday(scheduledDate)) {
-              return priorityOrder['agendado-hoje'];
-          }
-          return priorityOrder['agendado-futuro'];
-      }
-      return priorityOrder[ticket.type as keyof typeof priorityOrder] ?? 99;
-    };
-
-    const priorityA = getPriority(a);
-    const priorityB = getPriority(b);
-
-    if (priorityA !== priorityB) {
-      return priorityA - priorityB;
-    }
-    
-    // If priorities are the same, sort by creation date (older first)
-    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-  });
+        const priorityOrder = { 'agendado-atrasado': -1, 'agendado-hoje': 0, 'retorno': 1, 'contrato': 2, 'urgente': 3, 'padrão': 4, 'agendado-futuro': 5 };
+        const getPriority = (ticket: ExternalTicket) => {
+            if (ticket.type === 'agendado' && ticket.scheduledTo) {
+                const scheduledDate = parseISO(ticket.scheduledTo);
+                if (isPast(scheduledDate) && !isToday(scheduledDate)) return priorityOrder['agendado-atrasado'];
+                if (isToday(scheduledDate)) return priorityOrder['agendado-hoje'];
+                return priorityOrder['agendado-futuro'];
+            }
+            return priorityOrder[ticket.type as keyof typeof priorityOrder] ?? 99;
+        };
+        const priorityA = getPriority(a);
+        const priorityB = getPriority(b);
+        if (priorityA !== priorityB) return priorityA - priorityB;
+        
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    });
+  }, [tickets, user, statusFilter, technicianFilter, sectorFilter, contractOnly, myTicketsOnly, searchQuery]);
   
-  const hasActiveRoute = filteredTickets.some(t => t.technicianId === user?.id && t.enRoute);
+  const shouldPaginate = statusFilter === 'all' || !!searchQuery;
+  const totalPages = Math.ceil(filteredAndSortedTickets.length / TICKETS_PER_PAGE);
+  const paginatedTickets = shouldPaginate ? filteredAndSortedTickets.slice((currentPage - 1) * TICKETS_PER_PAGE, currentPage * TICKETS_PER_PAGE) : filteredAndSortedTickets;
+
+  const hasActiveRoute = tickets.some(t => t.technicianId === user?.id && t.enRoute);
 
 
   if (loading) {
     return (
-        <div className="flex justify-center items-center h-64">
-            <Loader2 className="h-8 w-8 animate-spin" />
+        <div className="flex h-[calc(100vh-200px)] flex-col items-center justify-center gap-4 text-center">
+            <div className="space-y-4">
+                <div className="mx-auto h-24 w-48 animate-pulse rounded-md bg-muted" />
+                <h2 className="text-xl font-semibold">Carregando Chamados...</h2>
+                <p className="text-muted-foreground">Por favor, aguarde enquanto buscamos os dados.</p>
+                <p className="text-sm font-bold text-muted-foreground pt-2">Nexus Service</p>
+            </div>
         </div>
     );
   }
@@ -550,7 +697,7 @@ export default function ExternalTicketsPage() {
 
         {viewMode === 'kanban' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {filteredTickets.map(ticket => (
+                {paginatedTickets.map(ticket => (
                 <ExternalTicketCard 
                     key={ticket.id} 
                     ticket={ticket}
@@ -565,7 +712,7 @@ export default function ExternalTicketsPage() {
                     onStatusChange={handleStatusChange}
                 />
                 ))}
-                {filteredTickets.length === 0 && (
+                {paginatedTickets.length === 0 && (
                 <div className="col-span-full text-center text-muted-foreground py-10">
                     Nenhum chamado encontrado com os filtros selecionados.
                 </div>
@@ -573,7 +720,7 @@ export default function ExternalTicketsPage() {
             </div>
         ) : (
             <ExternalTicketsTable 
-              data={filteredTickets} 
+              data={paginatedTickets} 
               users={users} 
               sectors={sectors} 
               currentUser={user}
@@ -582,13 +729,60 @@ export default function ExternalTicketsPage() {
               onViewDetails={handleViewDetails}
             />
         )}
+
+        {shouldPaginate && totalPages > 1 && (
+            <div className="flex items-center justify-end space-x-2 py-4">
+                 <div className="flex-1 text-sm text-muted-foreground">
+                    Página {currentPage} de {totalPages}
+                </div>
+                <Button
+                    variant="outline"
+                    className="hidden h-8 w-8 p-0 lg:flex"
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                >
+                    <ChevronsLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                >
+                    <ChevronLeft className="mr-2 h-4 w-4" />
+                    Anterior
+                </Button>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                >
+                    Próximo
+                    <ChevronRight className="ml-2 h-4 w-4" />
+                </Button>
+                 <Button
+                    variant="outline"
+                    className="hidden h-8 w-8 p-0 lg:flex"
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={currentPage === totalPages}
+                >
+                    <ChevronsRight className="h-4 w-4" />
+                </Button>
+            </div>
+        )}
       </div>
 
        <DialogContent className="sm:max-w-4xl">
             <DialogHeader>
             <DialogTitle>Novo Chamado Externo</DialogTitle>
             </DialogHeader>
-            <NewExternalTicketForm onFinished={() => setIsNewTicketDialogOpen(false)} onSave={handleAddTicket} />
+            <NewExternalTicketForm 
+                onFinished={() => setIsNewTicketDialogOpen(false)} 
+                onSave={async (values) => {
+                    await handleAddTicket(values);
+                }}
+            />
         </DialogContent>
 
         <div className="fixed bottom-20 md:bottom-6 right-6 z-50">
@@ -604,14 +798,11 @@ export default function ExternalTicketsPage() {
        <AlertDialog open={confirmation.isOpen} onOpenChange={(open) => !open && setConfirmation({isOpen: false, action: null, ticket: null})}>
         <AlertDialogContent>
             <AlertDialogHeader>
-                <AlertDialogTitle>Confirmar Ação</AlertDialogTitle>
-                <AlertDialogDescription>
-                    {`Você tem certeza que deseja ${getConfirmationMessage()} este chamado?`}
-                </AlertDialogDescription>
+                {getConfirmationContent()}
             </AlertDialogHeader>
             <AlertDialogFooter>
                 <AlertDialogCancel>Voltar</AlertDialogCancel>
-                <AlertDialogAction onClick={executeConfirmedAction}>Confirmar</AlertDialogAction>
+                <AlertDialogAction onClick={executeConfirmedAction} disabled={(confirmation.action === 'reopen' || confirmation.action === 'cancel') && !confirmation.reason}>Confirmar</AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -619,5 +810,3 @@ export default function ExternalTicketsPage() {
     </>
   );
 }
-
-    

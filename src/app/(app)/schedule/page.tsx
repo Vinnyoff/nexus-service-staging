@@ -4,18 +4,21 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { useAuth } from '@/hooks/use-auth';
-import type { CalendarEvent, ExternalTicket, InternalTicket, User } from '@/lib/types';
+import type { CalendarEvent, ExternalTicket, InternalTicket, User, ServiceContract, ProjectedEventResource, Sector } from '@/lib/types';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '@/firebase/config';
-import { Loader2, Calendar as CalendarIcon, List, Clock, Wrench } from 'lucide-react';
+import { Loader2, Calendar as CalendarIcon, List, Clock, Wrench, CalendarCheck, ShieldCheck, AlertCircle } from 'lucide-react';
 import { Calendar, momentLocalizer, Views, NavigateAction, View } from 'react-big-calendar';
 import moment from 'moment';
 import 'moment/locale/pt-br';
 import '../../calendar.css';
-import { parseISO } from 'date-fns';
+import { addDays, parseISO, startOfDay } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
+import { cn } from '@/lib/utils';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+
 
 moment.locale('pt-br');
 const localizer = momentLocalizer(moment);
@@ -36,12 +39,24 @@ const messages = {
   showMore: (total: any) => `+ Ver mais (${total})`,
 };
 
+const LEGEND_ITEMS = [
+    { label: 'Padrão / Agendado', color: 'bg-primary' },
+    { label: 'Contrato', color: 'bg-[hsl(var(--chart-2))]' },
+    { label: 'Urgente', color: 'bg-destructive' },
+    { label: 'Retorno', color: 'bg-[hsl(var(--chart-5))]' },
+    { label: 'Atendimento Interno', color: 'bg-secondary' },
+    { label: 'Preventiva Prevista', color: 'border-muted-foreground', isProjected: true },
+    { label: 'Concluído', color: 'bg-muted', isConcluded: true },
+];
+
 export default function SchedulePage() {
   const { user } = useAuth();
   const router = useRouter();
   const [externalTickets, setExternalTickets] = useState<ExternalTicket[]>([]);
   const [internalTickets, setInternalTickets] = useState<InternalTicket[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [contracts, setContracts] = useState<ServiceContract[]>([]);
+  const [allSectors, setAllSectors] = useState<Sector[]>([]);
   const [loading, setLoading] = useState(true);
   
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -50,24 +65,59 @@ export default function SchedulePage() {
   useEffect(() => {
     setLoading(true);
 
-    const unsubscribes = [
-      onSnapshot(collection(db, 'external-tickets'), (snapshot) => {
-        setExternalTickets(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as ExternalTicket)));
-      }),
-      onSnapshot(collection(db, 'internal-tickets'), (snapshot) => {
-        setInternalTickets(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as InternalTicket)));
-      }),
-      onSnapshot(collection(db, 'users'), (snapshot) => {
-        setAllUsers(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as User)));
-      }),
+    const collectionsToFetch = [
+      { name: 'external-tickets', setter: setExternalTickets },
+      { name: 'internal-tickets', setter: setInternalTickets },
+      { name: 'users', setter: setAllUsers },
+      { name: 'serviceContracts', setter: setContracts },
+      { name: 'sectors', setter: setAllSectors },
     ];
 
-    setLoading(false);
+    let loadedCount = 0;
+    const totalCollections = collectionsToFetch.length;
+
+    const unsubscribes = collectionsToFetch.map(({ name, setter }) => {
+      return onSnapshot(collection(db, name),
+        (snapshot) => {
+          setter(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any);
+          loadedCount++;
+          if (loadedCount === totalCollections) {
+            setLoading(false);
+          }
+        },
+        (error) => {
+          console.error(`Error fetching ${name}:`, error);
+          setter([]);
+          loadedCount++;
+          if (loadedCount === totalCollections) {
+            setLoading(false);
+          }
+        }
+      );
+    });
+
     return () => unsubscribes.forEach((unsub) => unsub());
   }, []);
   
   const events = useMemo(() => {
-    const externalEvents: CalendarEvent[] = externalTickets
+    if (!user) return [];
+
+    let visibleExternalTickets = externalTickets;
+    let visibleInternalTickets = internalTickets;
+    let visibleContracts = contracts.filter(c => c.status === 'active');
+
+    if (user.role === 'encarregado') {
+      const userSectorIds = user.sectorIds || [];
+      visibleExternalTickets = externalTickets.filter(ticket => userSectorIds.includes(ticket.sectorId));
+      visibleInternalTickets = internalTickets.filter(ticket => ticket.sectorId && userSectorIds.includes(ticket.sectorId));
+      visibleContracts = visibleContracts.filter(c => c.sectorIds.some(sId => userSectorIds.includes(sId)));
+    } else if (user.role === 'tecnico') {
+      visibleExternalTickets = externalTickets.filter(ticket => ticket.technicianId === user.id);
+      visibleInternalTickets = internalTickets.filter(ticket => ticket.assigneeId === user.id);
+      visibleContracts = []; // Técnicos não veem preventivas futuras
+    }
+
+    const externalEvents: CalendarEvent[] = visibleExternalTickets
       .filter(ticket => ticket.scheduledTo)
       .map(ticket => ({
         title: `${ticket.client.name}`,
@@ -77,7 +127,7 @@ export default function SchedulePage() {
         type: 'external'
       }));
       
-    const internalEvents: CalendarEvent[] = internalTickets
+    const internalEvents: CalendarEvent[] = visibleInternalTickets
         .filter(ticket => ticket.scheduledTo)
         .map(ticket => ({
             title: ticket.title,
@@ -86,9 +136,50 @@ export default function SchedulePage() {
             resource: ticket,
             type: 'internal'
         }));
+    
+    const projectedEvents: CalendarEvent[] = [];
+    if (user.role !== 'tecnico') {
+        visibleContracts.forEach(contract => {
+            const visibleSectorsForContract = user.role === 'encarregado' 
+                ? contract.sectorIds.filter(sId => user.sectorIds!.includes(sId))
+                : contract.sectorIds;
 
-    return [...externalEvents, ...internalEvents];
-  }, [externalTickets, internalTickets]);
+            visibleSectorsForContract.forEach(sectorId => {
+                const lastTicket = externalTickets
+                    .filter(t => t.client.id === contract.clientId && t.sectorId === sectorId && t.type === 'contrato' && t.status === 'concluído')
+                    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+                    [0];
+                
+                const baseDate = lastTicket ? parseISO(lastTicket.updatedAt) : parseISO(contract.createdAt);
+                let nextDueDate = addDays(baseDate, contract.frequencyDays);
+                
+                const today = startOfDay(new Date());
+                while (nextDueDate < today) {
+                    nextDueDate = addDays(nextDueDate, contract.frequencyDays);
+                }
+                
+                const nextDueDateStartOfDay = startOfDay(nextDueDate);
+
+                projectedEvents.push({
+                    title: `Preventiva: ${contract.clientName}`,
+                    start: nextDueDateStartOfDay,
+                    end: nextDueDateStartOfDay,
+                    type: 'projected',
+                    resource: {
+                        id: `proj-${contract.id}-${sectorId}`,
+                        clientName: contract.clientName,
+                        clientId: contract.clientId,
+                        sectorId: sectorId,
+                        status: 'previsto',
+                    }
+                });
+            });
+        });
+    }
+
+
+    return [...externalEvents, ...internalEvents, ...projectedEvents];
+  }, [externalTickets, internalTickets, user, contracts]);
 
   const onNavigate = useCallback((newDate: Date) => setCurrentDate(newDate), [setCurrentDate])
   const onView = useCallback((newView: View) => setCurrentView(newView), [setCurrentView])
@@ -96,24 +187,66 @@ export default function SchedulePage() {
   const onSelectEvent = useCallback((event: CalendarEvent) => {
     if (event.type === 'external') {
       router.push(`/external-tickets/${event.resource.id}`);
-    } else {
+    } else if (event.type === 'internal') {
       // Potentially open a dialog for internal tickets in the future
       console.log('Internal ticket selected:', event.resource);
     }
   }, [router]);
 
   const eventStyleGetter = (event: CalendarEvent) => {
-    let style = {
-      backgroundColor: 'hsl(var(--primary))',
-      color: 'hsl(var(--primary-foreground))',
+    const style: React.CSSProperties = {
+      borderRadius: '4px',
+      opacity: 0.95,
+      borderWidth: '1px',
+      borderStyle: 'solid',
+      borderColor: 'transparent',
     };
-    if (event.type === 'internal') {
-      style.backgroundColor = 'hsl(var(--secondary))';
-      style.color = 'hsl(var(--secondary-foreground))';
-    }
-    if ((event.resource as ExternalTicket).status === 'concluído') {
+
+    if ((event.resource as ExternalTicket | InternalTicket).status === 'concluído') {
       style.backgroundColor = 'hsl(var(--muted))';
       style.color = 'hsl(var(--muted-foreground))';
+      style.textDecoration = 'line-through';
+      style.opacity = 0.6;
+      style.borderColor = 'hsl(var(--border))';
+      return { style };
+    }
+
+    switch (event.type) {
+        case 'external':
+            const ticket = event.resource as ExternalTicket;
+            switch (ticket.type) {
+                case 'urgente':
+                    style.backgroundColor = 'hsl(var(--destructive))';
+                    style.color = 'hsl(var(--destructive-foreground))';
+                    style.borderColor = 'hsl(var(--destructive) / 0.5)';
+                    break;
+                case 'contrato':
+                    style.backgroundColor = 'hsl(var(--chart-2))';
+                    style.color = 'hsl(var(--accent-foreground))';
+                    style.borderColor = 'hsl(var(--chart-2) / 0.5)';
+                    break;
+                case 'retorno':
+                    style.backgroundColor = 'hsl(var(--chart-5))';
+                    style.color = 'hsl(var(--accent-foreground))';
+                    style.borderColor = 'hsl(var(--chart-5) / 0.5)';
+                    break;
+                default: // padrão, agendado
+                    style.backgroundColor = 'hsl(var(--primary))';
+                    style.color = 'hsl(var(--primary-foreground))';
+                    style.borderColor = 'hsl(var(--primary) / 0.5)';
+            }
+            break;
+        case 'internal':
+            style.backgroundColor = 'hsl(var(--secondary))';
+            style.color = 'hsl(var(--secondary-foreground))';
+            style.borderColor = 'hsl(var(--border))';
+            break;
+        case 'projected':
+            style.backgroundColor = 'transparent';
+            style.color = 'hsl(var(--muted-foreground))';
+            style.borderStyle = 'dashed';
+            style.borderColor = 'hsl(var(--border))';
+            break;
     }
     return { style };
   };
@@ -130,8 +263,21 @@ export default function SchedulePage() {
     <>
       <PageHeader
         title="Agenda"
-        description="Visualize todos os atendimentos agendados."
+        description="Visualize todos os atendimentos agendados e previstos."
       />
+      <Alert className="mb-4">
+        <AlertDescription>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <span className="font-semibold text-sm">Legenda:</span>
+            {LEGEND_ITEMS.map(item => (
+                <div key={item.label} className="flex items-center gap-2">
+                    <div className={cn("h-3 w-3 rounded-full", item.color, item.isProjected && 'border-2 border-dashed bg-transparent', item.isConcluded && 'line-through opacity-70')} />
+                    <span className={cn("text-xs text-muted-foreground", item.isConcluded && 'line-through')}>{item.label}</span>
+                </div>
+            ))}
+          </div>
+        </AlertDescription>
+      </Alert>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-3 xl:col-span-2 h-[75vh] bg-card p-4 rounded-lg border">
             <Calendar
@@ -147,6 +293,7 @@ export default function SchedulePage() {
                 view={currentView}
                 onSelectEvent={onSelectEvent}
                 eventPropGetter={eventStyleGetter}
+                popup
             />
         </div>
         <Card className="lg:col-span-3 xl:col-span-1 h-auto xl:h-[75vh] flex flex-col">
@@ -156,29 +303,49 @@ export default function SchedulePage() {
                     Eventos do Mês
                 </CardTitle>
             </CardHeader>
-            <CardContent className="flex-1 overflow-y-auto">
-                <div className="space-y-4">
+             <CardContent className="flex-1 overflow-y-auto p-2">
+                <div className="space-y-2">
                     {events
                         .filter(e => moment(e.start).isSame(currentDate, 'month'))
                         .sort((a,b) => a.start.getTime() - b.start.getTime())
                         .map((event, index) => {
-                           const user = allUsers.find(u => u.id === (event.resource as ExternalTicket).technicianId)
-                           return (
-                            <div key={`${event.resource.id}-${index}`} className="flex items-start gap-4 p-3 rounded-md border bg-muted/50 hover:bg-muted cursor-pointer" onClick={() => onSelectEvent(event)}>
-                                <div className="flex flex-col items-center justify-center w-12">
-                                    <span className="text-sm font-bold text-primary">{moment(event.start).format('DD')}</span>
-                                    <span className="text-xs text-muted-foreground">{moment(event.start).format('MMM')}</span>
+                            const isConcluded = (event.resource as ExternalTicket | InternalTicket).status === 'concluído';
+                            const isProjected = event.type === 'projected';
+                            
+                            const eventStyle = eventStyleGetter(event).style;
+                            const listItemStyle: React.CSSProperties = {
+                                backgroundColor: isConcluded || isProjected ? 'hsl(var(--muted) / 0.3)' : `${eventStyle.backgroundColor}1A`, // 10% opacity
+                                borderLeftColor: eventStyle.backgroundColor,
+                                borderLeftWidth: '4px',
+                            };
+                            
+                            let icon = <Wrench className="h-4 w-4" />;
+                            if(isProjected) icon = <CalendarCheck className="h-4 w-4" />;
+                            else if(event.type === 'internal') icon = <Clock className="h-4 w-4" />;
+                            
+                            const assignee = allUsers.find(u => u.id === (event.resource as ExternalTicket).technicianId)
+                            const creator = allUsers.find(u => u.id === (event.resource as InternalTicket).creatorId)
+
+                            return (
+                            <div key={`${event.resource.id}-${index}`} style={listItemStyle} className={cn("flex items-center gap-3 p-3 rounded-lg cursor-pointer hover:bg-muted", isConcluded && "opacity-70")} onClick={() => !isProjected && onSelectEvent(event)}>
+                                <div className="flex flex-col items-center justify-center text-center w-12">
+                                    <span className="font-bold text-lg leading-none">{moment(event.start).format('DD')}</span>
+                                    <span className="text-xs text-muted-foreground uppercase">{moment(event.start).format('MMM')}</span>
                                 </div>
-                                <div className="flex-1">
-                                    <p className="font-semibold text-sm">{event.title}</p>
-                                    <p className="text-xs text-muted-foreground flex items-center">
-                                       {event.type === 'external' ? <Wrench className="h-3 w-3 mr-1.5" /> : <Clock className="h-3 w-3 mr-1.5" />}
-                                       {user ? `Téc: ${user.name}` : (event.resource as InternalTicket).creatorId ? `Criador: ${allUsers.find(u => u.id === (event.resource as InternalTicket).creatorId)?.name}` : ''}
-                                    </p>
+                                <div className="flex-1 space-y-0.5 overflow-hidden">
+                                    <p className={cn("font-semibold text-sm truncate", isConcluded && "line-through")}>{event.title}</p>
+                                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                        <div className="flex items-center gap-1.5">
+                                            {icon}
+                                            <span>{isProjected ? `Setor: ${allSectors.find(s => s.id === (event.resource as ProjectedEventResource).sectorId)?.name}` : (assignee ? assignee.name.split(' ')[0] : (creator ? `Por: ${creator.name.split(' ')[0]}`: 'N/A'))}</span>
+                                        </div>
+                                    </div>
                                 </div>
-                                <Badge variant={event.resource.status === 'concluído' ? 'outline' : 'default'} className="capitalize text-xs">{event.resource.status}</Badge>
+                                <Badge variant={isConcluded ? 'outline' : 'default'} style={isConcluded ? {} : {backgroundColor: eventStyle.backgroundColor, color: eventStyle.color}} className="capitalize text-xs whitespace-nowrap">
+                                    {isProjected ? 'Previsto' : event.resource.status}
+                                </Badge>
                             </div>
-                           )
+                            )
                         })
                     }
                      {events.filter(e => moment(e.start).isSame(currentDate, 'month')).length === 0 && (

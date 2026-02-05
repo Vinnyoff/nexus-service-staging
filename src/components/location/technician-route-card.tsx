@@ -2,7 +2,7 @@
 
 'use client';
 
-import type { ExternalTicket, Technician } from "@/lib/types";
+import type { ExternalTicket, User } from "@/lib/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { CheckCircle, Circle, MapPin, Truck, Home, AlertTriangle } from "lucide-react";
@@ -12,7 +12,7 @@ import { Separator } from "../ui/separator";
 import { useMemo, useState } from "react";
 import { Button } from "../ui/button";
 
-interface TechnicianWithAvatar extends Technician {
+interface TechnicianWithAvatar extends User {
     avatarUrl?: string;
 }
 

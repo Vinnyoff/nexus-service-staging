@@ -24,9 +24,13 @@ import {
 } from "@/components/ui/select";
 import { Sector } from "@/lib/types";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { Dialog, DialogContent, DialogTrigger } from "../ui/dialog";
 import { cn } from "@/lib/utils";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { useState, useMemo } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { ScrollArea } from "../ui/scroll-area";
 
 
 const formSchema = z.object({
@@ -53,6 +57,9 @@ interface NewUserFormProps {
 }
 
 export function NewUserForm({ onSave, onFinished, sectors }: NewUserFormProps) {
+  const isMobile = useIsMobile();
+  const [sectorSearch, setSectorSearch] = useState("");
+
   const form = useForm<NewUserFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -72,6 +79,44 @@ export function NewUserForm({ onSave, onFinished, sectors }: NewUserFormProps) {
   function onSubmit(values: NewUserFormValues) {
     onSave(values);
   }
+
+  const filteredSectors = useMemo(() => {
+    const activeSectors = sectors.filter(s => s.status === 'active');
+    if (!sectorSearch) return activeSectors;
+    return activeSectors.filter(s => s.name.toLowerCase().includes(sectorSearch.toLowerCase()));
+  }, [sectorSearch, sectors]);
+
+  const SectorSelectorContent = ({ onSelect }: { onSelect: (id: string) => void }) => (
+     <Command>
+        <CommandInput 
+            placeholder="Buscar setor..."
+            value={sectorSearch}
+            onValueChange={setSectorSearch}
+        />
+        <CommandEmpty>Nenhum setor encontrado.</CommandEmpty>
+        <CommandGroup>
+            <ScrollArea className="h-48">
+                {filteredSectors.map((sector) => (
+                <CommandItem
+                    value={sector.name}
+                    key={sector.id}
+                    onSelect={() => onSelect(sector.id)}
+                >
+                    <Check
+                    className={cn(
+                        "mr-2 h-4 w-4",
+                        form.watch('sectorIds')?.includes(sector.id)
+                        ? "opacity-100"
+                        : "opacity-0"
+                    )}
+                    />
+                    {sector.name}
+                </CommandItem>
+                ))}
+            </ScrollArea>
+        </CommandGroup>
+    </Command>
+  );
 
   return (
     <Form {...form}>
@@ -190,58 +235,24 @@ export function NewUserForm({ onSave, onFinished, sectors }: NewUserFormProps) {
                 render={({ field }) => (
                 <FormItem className="flex flex-col">
                     <FormLabel>Setores</FormLabel>
-                     <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
+                    
+                     <FormControl>
+                        <Button
+                            type="button"
                             variant="outline"
                             role="combobox"
                             className={cn(
-                              "w-full justify-between",
-                              !field.value?.length && "text-muted-foreground"
+                                "w-full justify-between",
+                                !field.value?.length && "text-muted-foreground"
                             )}
-                          >
+                            >
                             {field.value && field.value.length > 0
-                              ? `${field.value.length} setor(es) selecionado(s)`
-                              : "Selecione os setores"}
+                                ? `${field.value.length} setor(es) selecionado(s)`
+                                : "Selecione os setores"}
                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-full p-0">
-                        <Command>
-                          <CommandInput placeholder="Buscar setor..." />
-                          <CommandEmpty>Nenhum setor encontrado.</CommandEmpty>
-                          <CommandGroup>
-                            <CommandList>
-                                {sectors.map((sector) => (
-                                <CommandItem
-                                    value={sector.name}
-                                    key={sector.id}
-                                    onSelect={() => {
-                                    const currentIds = field.value || [];
-                                    const newIds = currentIds.includes(sector.id)
-                                        ? currentIds.filter((id) => id !== sector.id)
-                                        : [...currentIds, sector.id];
-                                    field.onChange(newIds);
-                                    }}
-                                >
-                                    <Check
-                                    className={cn(
-                                        "mr-2 h-4 w-4",
-                                        field.value?.includes(sector.id)
-                                        ? "opacity-100"
-                                        : "opacity-0"
-                                    )}
-                                    />
-                                    {sector.name}
-                                </CommandItem>
-                                ))}
-                            </CommandList>
-                          </CommandGroup>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
+                        </Button>
+                    </FormControl>
+                    
                     <FormMessage />
                 </FormItem>
                 )}
@@ -256,3 +267,4 @@ export function NewUserForm({ onSave, onFinished, sectors }: NewUserFormProps) {
     </Form>
   );
 }
+

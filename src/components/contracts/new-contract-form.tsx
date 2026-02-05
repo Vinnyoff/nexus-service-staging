@@ -14,18 +14,24 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Client, Sector } from "@/lib/types";
-import { useState } from "react";
+import { Client, Sector, Checklist } from "@/lib/types";
+import { useState, useMemo } from "react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { Textarea } from "../ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { Separator } from "../ui/separator";
+
 
 const formSchema = z.object({
   clientId: z.string({ required_error: "Selecione um cliente." }),
+  description: z.string().optional(),
   frequencyDays: z.coerce.number().positive({ message: "A frequência deve ser maior que zero." }),
   sectorIds: z.array(z.string()).min(1, { message: "Selecione pelo menos um setor." }),
+  defaultChecklists: z.record(z.string().optional()).optional(),
 });
 
 export type NewContractFormValues = z.infer<typeof formSchema>;
@@ -33,11 +39,12 @@ export type NewContractFormValues = z.infer<typeof formSchema>;
 interface NewContractFormProps {
   clients: Client[];
   sectors: Sector[];
+  checklists: Checklist[];
   onSave: (values: NewContractFormValues) => void;
   onFinished: () => void;
 }
 
-export function NewContractForm({ clients, sectors, onSave, onFinished }: NewContractFormProps) {
+export function NewContractForm({ clients, sectors, checklists, onSave, onFinished }: NewContractFormProps) {
   const { user } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
   const [openClientSelector, setOpenClientSelector] = useState(false);
@@ -46,16 +53,32 @@ export function NewContractForm({ clients, sectors, onSave, onFinished }: NewCon
     resolver: zodResolver(formSchema),
     defaultValues: {
         clientId: undefined,
+        description: "",
         frequencyDays: 30,
         sectorIds: [],
+        defaultChecklists: {},
     },
   });
+  
+  const selectedSectors = form.watch("sectorIds");
 
   async function onSubmit(values: NewContractFormValues) {
     setIsSaving(true);
-    await onSave(values);
+    const finalChecklists: Record<string, string> = {};
+    if (values.defaultChecklists) {
+        for (const sectorId of values.sectorIds) {
+            if (values.defaultChecklists[sectorId] && values.defaultChecklists[sectorId] !== '_none_') {
+                finalChecklists[sectorId] = values.defaultChecklists[sectorId]!;
+            }
+        }
+    }
+    
+    const valuesToSave = { ...values, defaultChecklists: finalChecklists };
+    await onSave(valuesToSave);
     setIsSaving(false);
   }
+
+  const sortedClients = [...clients].sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <Form {...form}>
@@ -93,7 +116,7 @@ export function NewContractForm({ clients, sectors, onSave, onFinished }: NewCon
                             <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
                             <CommandGroup>
                                 <CommandList>
-                                {clients.map((client) => (
+                                {sortedClients.map((client) => (
                                     <CommandItem
                                         value={client.name}
                                         key={client.id}
@@ -120,6 +143,20 @@ export function NewContractForm({ clients, sectors, onSave, onFinished }: NewCon
                     </Popover>
                     <FormMessage />
                     </FormItem>
+                )}
+            />
+
+             <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Descrição (Opcional)</FormLabel>
+                    <FormControl>
+                    <Textarea placeholder="Ex: Contrato de Impressoras, Contrato de Rede..." {...field} />
+                    </FormControl>
+                    <FormMessage />
+                </FormItem>
                 )}
             />
 
@@ -199,6 +236,45 @@ export function NewContractForm({ clients, sectors, onSave, onFinished }: NewCon
                 </FormItem>
                 )}
             />
+            
+            {selectedSectors && selectedSectors.length > 0 && (
+                <div className="space-y-4 pt-4 border-t">
+                     <h3 className="text-md font-medium text-foreground">Checklists Padrão por Setor</h3>
+                     {selectedSectors.map(sectorId => {
+                         const sector = sectors.find(s => s.id === sectorId);
+                         if (!sector) return null;
+                         const availableChecklists = checklists.filter(c => c.sectorId === sectorId && c.status === 'active');
+                         return (
+                              <FormField
+                                key={sectorId}
+                                control={form.control}
+                                name={`defaultChecklists.${sectorId}`}
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>{sector.name}</FormLabel>
+                                        <Select onValueChange={field.onChange} value={field.value || '_none_'} disabled={availableChecklists.length === 0}>
+                                            <FormControl>
+                                                <SelectTrigger>
+                                                <SelectValue placeholder={availableChecklists.length === 0 ? "Nenhum checklist para este setor" : "Nenhum"} />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                <SelectItem value="_none_">Nenhum</SelectItem>
+                                                {availableChecklists.map((checklist) => (
+                                                <SelectItem key={checklist.id} value={checklist.id}>
+                                                    {checklist.name}
+                                                </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                         )
+                     })}
+                </div>
+            )}
         </div>
 
         <div className="flex justify-end gap-2 pt-4 border-t">

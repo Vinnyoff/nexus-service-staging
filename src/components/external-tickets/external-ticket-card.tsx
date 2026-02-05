@@ -13,7 +13,7 @@ import { format, parseISO, differenceInHours, formatDistanceToNowStrict, isAfter
 import { ptBR } from "date-fns/locale";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuItem, DropdownMenuSeparator } from "../ui/dropdown-menu";
 import { Button } from "../ui/button";
-import { MoreHorizontal, Calendar, UserSquare, MapPin, Hand, History, XCircle, Truck, Copy, Clock, AlertTriangle, Building2 } from "lucide-react";
+import { MoreHorizontal, Calendar, UserSquare, MapPin, Hand, History, XCircle, Truck, Copy, Clock, AlertTriangle, Building2, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 import { useEffect, useState } from "react";
@@ -84,11 +84,14 @@ export function ExternalTicketCard({
 }: ExternalTicketCardProps) {
   const creator = users.find((u) => u.id === ticket.creatorId);
   const assignee = users.find((u) => u.id === ticket.technicianId);
+  const finalizer = users.find((u) => u.id === ticket.finalizedBy);
   const sector = sectors.find(s => s.id === ticket.sectorId);
   const isCurrentUserAssigned = currentUser?.id === ticket.technicianId;
-
+  const hasComments = ticket.comments && ticket.comments.length > 0;
+  
   const canUserIntervene = currentUser && (
-    isCurrentUserAssigned ||
+    currentUser.id === ticket.creatorId || // The user who created the ticket
+    isCurrentUserAssigned || // The user assigned to it
     currentUser.role === 'admin' ||
     currentUser.role === 'gerente' ||
     (currentUser.role === 'encarregado' && ticket.sectorId && currentUser.sectorIds?.includes(ticket.sectorId))
@@ -140,11 +143,24 @@ export function ExternalTicketCard({
     );
   }
   
+  const getPriorityVariant = (priority: 'Normal' | 'Alta' | 'Extrema'): "secondary" | "default" | "destructive" => {
+    switch (priority) {
+        case 'Extrema':
+            return 'destructive';
+        case 'Alta':
+            return 'default';
+        case 'Normal':
+        default:
+            return 'secondary';
+    }
+  }
+
   const renderTechnicianStatus = () => {
     const technicianName = assignee?.name.split(' ')[0] || 'Técnico';
+    const finalizerName = finalizer?.name.split(' ')[0] || technicianName;
     switch (ticket.status) {
         case 'concluído':
-            return `Finalizado por ${technicianName}`;
+            return `Finalizado por ${finalizerName}`;
         case 'em andamento':
             return `Em andamento por ${technicianName}`;
         case 'pendente':
@@ -173,7 +189,24 @@ export function ExternalTicketCard({
       <CardHeader>
         <div className="flex justify-between items-start">
           <div className="flex-1 space-y-1.5">
-            <CardTitle className="text-lg">{truncatedClientName}</CardTitle>
+            <div className="flex items-center gap-2 flex-wrap">
+                <CardTitle className="text-lg">{truncatedClientName}</CardTitle>
+                {ticket.type === 'contrato' && ticket.priority && (
+                   <Badge variant={getPriorityVariant(ticket.priority)}>{ticket.priority}</Badge>
+                )}
+                {hasComments && (
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger>
+                                <MessageSquare className="h-5 w-5 text-primary fill-primary/20" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>Este chamado possui comentários.</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                )}
+            </div>
             {ticket.requesterName && <CardDescription className="text-xs">Solicitado por: {ticket.requesterName}</CardDescription>}
             <CardDescription className="pt-1">{renderTechnicianStatus()}</CardDescription>
           </div>

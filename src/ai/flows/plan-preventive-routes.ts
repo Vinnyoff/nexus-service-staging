@@ -56,11 +56,14 @@ const prompt = ai.definePrompt({
   input: { schema: PlanPreventiveRoutesInputSchema },
   output: { schema: PreventiveRoutePlanSchema },
   prompt: `
-    Você é um planejador de logística mestre para uma empresa de serviços técnicos. Sua tarefa é criar um plano de rotas de manutenção preventiva para o setor de {{sectorName}} durante o período de {{period.start}} a {{period.end}}.
+    Você é um planejador de logística mestre para uma empresa de serviços técnicos. Sua tarefa é criar um plano de rotas de manutenção preventiva.
+
+    INFORMAÇÕES GERAIS:
+    - Setor de Análise: {{sectorName}}
+    - Período de Planejamento: de {{period.start}} a {{period.end}}
+    - Ponto de Partida: {{startAddress}}
 
     O objetivo principal é agrupar os clientes em rotas diárias que sejam geograficamente eficientes, minimizando o deslocamento total. Cada item em 'suggestedRoutes' deve representar um dia de trabalho. A rota do Dia 1 deve começar a partir do endereço de partida fornecido.
-
-    Ponto de Partida: {{startAddress}}
 
     Considere uma capacidade média de 4 a 6 visitas por dia por equipe, dependendo da proximidade dos clientes. Agrupe clientes que estão na mesma região ou na mesma direção para o mesmo dia.
 

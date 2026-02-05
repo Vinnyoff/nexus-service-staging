@@ -14,41 +14,68 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Sector, ServiceContract } from "@/lib/types";
-import { useState } from "react";
+import { Sector, ServiceContract, Checklist } from "@/lib/types";
+import { useState, useMemo, useEffect } from "react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
+import { Textarea } from "../ui/textarea";
+import { Separator } from "../ui/separator";
+import { Checkbox } from "../ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+
 
 const formSchema = z.object({
+  description: z.string().optional(),
   frequencyDays: z.coerce.number().positive({ message: "A frequência deve ser maior que zero." }),
   sectorIds: z.array(z.string()).min(1, { message: "Selecione pelo menos um setor." }),
+  defaultChecklists: z.record(z.string().optional()).optional(),
+  status: z.enum(['active', 'inactive']),
 });
 
-export type EditContractFormValues = z.infer<typeof formSchema>;
+export type EditContractFormValues = Omit<z.infer<typeof formSchema>, 'status'>;
 
 interface EditContractFormProps {
   contract: ServiceContract;
   sectors: Sector[];
-  onSave: (contractId: string, values: EditContractFormValues) => Promise<boolean>;
+  checklists: Checklist[];
+  onSave: (contractId: string, values: EditContractFormValues, newStatus: 'active' | 'inactive') => Promise<boolean>;
   onFinished: () => void;
 }
 
-export function EditContractForm({ contract, sectors, onSave, onFinished }: EditContractFormProps) {
+export function EditContractForm({ contract, sectors, checklists, onSave, onFinished }: EditContractFormProps) {
   const [isSaving, setIsSaving] = useState(false);
 
-  const form = useForm<EditContractFormValues>({
+  const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+        description: contract.description || "",
         frequencyDays: contract.frequencyDays,
         sectorIds: contract.sectorIds,
+        defaultChecklists: contract.defaultChecklists || {},
+        status: contract.status,
     },
   });
+  
+  const selectedSectors = form.watch("sectorIds");
 
-  async function onSubmit(values: EditContractFormValues) {
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSaving(true);
-    await onSave(contract.id, values);
+    // Remove checklists for sectors that are no longer in the contract
+    const finalChecklists: Record<string, string> = {};
+    if (values.defaultChecklists) {
+        for (const sectorId of values.sectorIds) {
+            if (values.defaultChecklists[sectorId] && values.defaultChecklists[sectorId] !== '_none_') {
+                finalChecklists[sectorId] = values.defaultChecklists[sectorId]!;
+            }
+        }
+    }
+    
+    const valuesToSave = { ...values, defaultChecklists: finalChecklists };
+
+    const { status, ...otherValues } = valuesToSave;
+    await onSave(contract.id, otherValues, status);
     setIsSaving(false);
   }
 
@@ -56,6 +83,19 @@ export function EditContractForm({ contract, sectors, onSave, onFinished }: Edit
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-4">
+            <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Descrição (Opcional)</FormLabel>
+                    <FormControl>
+                    <Textarea placeholder="Ex: Contrato de Impressoras, Contrato de Rede..." {...field} />
+                    </FormControl>
+                    <FormMessage />
+                </FormItem>
+                )}
+            />
             <FormField
                 control={form.control}
                 name="frequencyDays"
@@ -132,6 +172,65 @@ export function EditContractForm({ contract, sectors, onSave, onFinished }: Edit
                 </FormItem>
                 )}
             />
+            
+            {selectedSectors && selectedSectors.length > 0 && (
+                <div className="space-y-4 pt-4 border-t">
+                     <h3 className="text-md font-medium text-foreground">Checklists Padrão por Setor</h3>
+                     {selectedSectors.map(sectorId => {
+                         const sector = sectors.find(s => s.id === sectorId);
+                         if (!sector) return null;
+                         const availableChecklists = checklists.filter(c => c.sectorId === sectorId && c.status === 'active');
+                         return (
+                              <FormField
+                                key={sectorId}
+                                control={form.control}
+                                name={`defaultChecklists.${sectorId}`}
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>{sector.name}</FormLabel>
+                                        <Select onValueChange={field.onChange} value={field.value || '_none_'} disabled={availableChecklists.length === 0}>
+                                            <FormControl>
+                                                <SelectTrigger>
+                                                <SelectValue placeholder={availableChecklists.length === 0 ? "Nenhum checklist para este setor" : "Nenhum"} />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                <SelectItem value="_none_">Nenhum</SelectItem>
+                                                {availableChecklists.map((checklist) => (
+                                                <SelectItem key={checklist.id} value={checklist.id}>
+                                                    {checklist.name}
+                                                </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                         )
+                     })}
+                </div>
+            )}
+            
+            <Separator className="my-4" />
+            
+             <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-start space-x-3 space-y-0 rounded-md border p-4">
+                    <FormControl>
+                        <Checkbox
+                            checked={field.value === 'active'}
+                            onCheckedChange={(checked) => field.onChange(checked ? 'active' : 'inactive')}
+                        />
+                    </FormControl>
+                    <FormLabel className="text-base">
+                        Contrato {field.value === 'active' ? 'Ativo' : 'Inativo'}
+                    </FormLabel>
+                  </FormItem>
+                )}
+              />
         </div>
 
         <div className="flex justify-end gap-2 pt-4 border-t">

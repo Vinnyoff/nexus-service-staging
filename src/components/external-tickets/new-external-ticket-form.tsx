@@ -14,17 +14,18 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { CalendarIcon, ArrowLeft, ArrowRight, Loader2, List, Check, Search, ChevronsUpDown, AlertTriangle } from "lucide-react";
+import { CalendarIcon, ArrowLeft, ArrowRight, Loader2, List, Check, Search, ChevronsUpDown, AlertTriangle, ListChecks } from "lucide-react";
 import { format, addHours } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { ptBR } from "date-fns/locale";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Checkbox } from "../ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
-import { Client, Sector, User, Technician } from "@/lib/types";
+import { Client, Sector, User, Technician, Checklist } from "@/lib/types";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/firebase/config";
 import { useAuth } from "@/hooks/use-auth";
@@ -34,6 +35,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import React from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const formSchema = z.object({
   clientId: z.string().optional(),
@@ -42,7 +44,9 @@ const formSchema = z.object({
   contact: z.string().optional(),
   isWhatsapp: z.boolean().default(false),
   description: z.string().min(5, { message: "A descrição é obrigatória." }),
+  isStandard: z.boolean().default(true),
   isContract: z.boolean().default(false),
+  contractPriority: z.string().optional(),
   isUrgent: z.boolean().default(false),
   address: z.object({
     street: z.string().optional(),
@@ -53,17 +57,33 @@ const formSchema = z.object({
   }).optional(),
   sectorId: z.string().min(1, { message: "O setor é obrigatório." }),
   assigneeId: z.string().optional(),
+  checklistId: z.string().optional(),
   scheduledToDate: z.date().optional(),
   scheduledToTime: z.string().optional(),
   hasCustomSla: z.boolean().default(false),
   customSlaHours: z.coerce.number().optional(),
+}).superRefine((data, ctx) => {
+    if (data.isStandard && data.isContract) {
+         ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Apenas 'Padrão' ou 'Contrato' pode ser selecionado, não ambos.",
+            path: ["isStandard"],
+        });
+    }
+    if (!data.isStandard && !data.isContract) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Selecione 'Padrão' ou 'Contrato'.",
+            path: ["isStandard"],
+        });
+    }
 });
 
 export type NewExternalTicketFormValues = z.infer<typeof formSchema>;
 
 interface NewExternalTicketFormProps {
   onFinished: () => void;
-  onSave: (values: NewExternalTicketFormValues & { type: 'padrão' | 'contrato' | 'urgente' | 'agendado' | 'retorno', slaExpiresAt?: string }) => void;
+  onSave: (values: NewExternalTicketFormValues & { type: 'padrão' | 'contrato' | 'urgente' | 'agendado' | 'retorno', slaExpiresAt?: string, priority?: string, checklist?: { taskId: string, completed: boolean }[] }) => Promise<void>;
 }
 
 const steps = [
@@ -76,13 +96,16 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
     const { user } = useAuth();
     const { toast } = useToast();
     const [currentStep, setCurrentStep] = useState(1);
-    const [addressMode, setAddressMode] = useState<'api' | 'manual' | 'none'>('none');
+    const [addressMode, setAddressMode] = useState<'api' | 'manual' | 'none'>('manual');
     const [sectors, setSectors] = useState<Sector[]>([]);
     const [users, setUsers] = useState<User[]>([]);
-    const [technicians, setTechnicians] = useState<Technician[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
+    const [checklists, setChecklists] = useState<Checklist[]>([]);
     const [openClientSelector, setOpenClientSelector] = useState(false);
     const [clientSearch, setClientSearch] = useState("");
+    const [isSaving, setIsSaving] = useState(false);
+    const isMobile = useIsMobile();
+
 
     // SLA State
     const [selectedClientSla, setSelectedClientSla] = useState<number | undefined>(undefined);
@@ -91,23 +114,23 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
-                const [sectorsSnapshot, usersSnapshot, clientsSnapshot, techsSnapshot] = await Promise.all([
+                const [sectorsSnapshot, usersSnapshot, clientsSnapshot, checklistsSnapshot] = await Promise.all([
                     getDocs(collection(db, "sectors")),
                     getDocs(collection(db, "users")),
                     getDocs(collection(db, "clients")),
-                    getDocs(collection(db, "technicians")),
+                    getDocs(collection(db, "checklists")),
                 ]);
 
                 const sectorsData = sectorsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sector));
                 const usersData = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
                 const clientsData = clientsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client))
                   .sort((a, b) => a.name.localeCompare(b.name));
-                const techsData = techsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Technician));
+                const checklistsData = checklistsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Checklist));
 
                 setSectors(sectorsData);
                 setUsers(usersData);
                 setClients(clientsData);
-                setTechnicians(techsData);
+                setChecklists(checklistsData);
 
             } catch (error) {
                 console.error("Error fetching form data: ", error);
@@ -139,8 +162,10 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
             contact: "",
             isWhatsapp: false,
             description: "",
+            isStandard: true,
             isContract: false,
             isUrgent: false,
+            contractPriority: "Normal",
             address: {
                 street: "",
                 number: "",
@@ -148,30 +173,46 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                 city: "Ji-Paraná",
                 state: "RO",
             },
-            sectorId: user?.role === 'encarregado' && user.sectorIds?.length === 1 ? user.sectorIds[0] : (user?.role === 'tecnico' && user.sectorIds?.length === 1 ? user.sectorIds[0] : undefined),
+            sectorId: user?.role === 'tecnico' && user.sectorIds?.length === 1 ? user.sectorIds[0] : undefined,
+            checklistId: undefined,
             scheduledToTime: "",
             hasCustomSla: false,
             customSlaHours: undefined,
         },
     });
 
+    const isContract = form.watch("isContract");
     const selectedSectorId = form.watch("sectorId");
+    const clientNameValue = form.watch('clientName');
+    const selectedClientId = form.watch('clientId');
+
+    useEffect(() => {
+        // Se o usuário alterar manualmente o nome de um cliente previamente selecionado,
+        // desvincule o ID para evitar inconsistência de dados.
+        if (selectedClientId) {
+            const selectedClient = clients.find(c => c.id === selectedClientId);
+            if (selectedClient && selectedClient.name !== clientNameValue) {
+                form.setValue('clientId', undefined, { shouldDirty: true });
+                setAddressMode('manual');
+            }
+        }
+    }, [clientNameValue, selectedClientId, clients, form]);
     
-    const filteredTechnicians = useMemo(() => {
+    const assignableUsers = useMemo(() => {
         if (!selectedSectorId) return [];
-        return technicians.filter(t => t.sectorIds && t.sectorIds.includes(selectedSectorId));
-    }, [technicians, selectedSectorId]);
+        return users.filter(u => (u.role === 'tecnico' || u.role === 'encarregado') && u.sectorIds?.includes(selectedSectorId));
+    }, [users, selectedSectorId]);
+    
+     const filteredChecklists = useMemo(() => {
+        if (!selectedSectorId) return [];
+        return checklists.filter(c => c.sectorId === selectedSectorId && c.status === 'active');
+    }, [checklists, selectedSectorId]);
         
     const visibleSectors = useMemo(() => {
         if (!user) return [];
-        if (user.role === 'admin' || user.role === 'gerente' || user.role === 'vendedor') {
-            return sectors.filter(s => s.status === 'active');
-        }
-        if ((user.role === 'encarregado' || user.role === 'tecnico') && user.sectorIds) {
-            return sectors.filter(s => user.sectorIds?.includes(s.id) && s.status === 'active');
-        }
-        return [];
-    }, [user, sectors]);
+        // Allow all active sectors for all roles capable of creating tickets
+        return sectors.filter(s => s.status === 'active');
+    }, [sectors]);
   
     const handleClientSelect = (clientId?: string) => {
         const client = clients.find(c => c.id === clientId);
@@ -192,7 +233,6 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                 setAddressMode('manual');
             }
         } else {
-            // Logic for when a client is deselected or not found
             form.reset({
                 ...form.getValues(),
                 clientId: undefined,
@@ -207,7 +247,7 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                 },
             });
             setSelectedClientSla(undefined);
-            setAddressMode('manual'); // Default to manual for a new entry
+            setAddressMode('manual');
         }
     }
 
@@ -219,7 +259,7 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
         let fieldsToValidate: (keyof NewExternalTicketFormValues)[] = [];
     
         if (currentStep === 1) {
-            fieldsToValidate = ['clientName', 'description'];
+            fieldsToValidate = ['clientName', 'description', 'isStandard', 'isContract'];
         } else if (currentStep === 2) {
             if (addressMode === 'manual') {
                 fieldsToValidate.push('address.street', 'address.neighborhood', 'address.city', 'address.state');
@@ -242,41 +282,61 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
         }
     }
 
-    function onSubmit(values: NewExternalTicketFormValues) {
-        let type: 'padrão' | 'contrato' | 'urgente' | 'agendado' | 'retorno' = 'padrão';
-
-        if (values.scheduledToDate) {
-            type = 'agendado';
-        } else if (values.isUrgent) {
-            type = 'urgente';
-        } else if (values.isContract) {
-            type = 'contrato';
-        }
-
-        const finalValues: any = { ...values, type };
-        if (addressMode === 'none') {
-            finalValues.address = undefined;
-        } else if (addressMode === 'api') {
-            const client = clients.find(c => c.id === values.clientId);
-            if (client && client.address) {
-                finalValues.address = client.address;
+    async function onSubmit(values: NewExternalTicketFormValues) {
+        setIsSaving(true);
+        try {
+            let type: 'padrão' | 'contrato' | 'urgente' | 'agendado' | 'retorno' = 'padrão';
+            
+            // Priority: Urgent > Contract > Standard
+            if (values.isUrgent) {
+                type = 'urgente';
+            } else if (values.isContract) {
+                type = 'contrato';
             }
-        }
 
-        let slaHours: number | undefined = undefined;
-        if (values.hasCustomSla && values.customSlaHours) {
-            slaHours = values.customSlaHours;
-        } else if (selectedClientSla) {
-            slaHours = selectedClientSla;
-        }
+            if (values.scheduledToDate) {
+                type = 'agendado';
+            }
 
-        if (slaHours) {
-            const now = new Date();
-            finalValues.slaExpiresAt = addHours(now, slaHours).toISOString();
+            const finalValues: any = { ...values, type, priority: values.isContract ? values.contractPriority : undefined };
+
+            if (addressMode === 'none') {
+                finalValues.address = undefined;
+            } else if (addressMode === 'api') {
+                const client = clients.find(c => c.id === values.clientId);
+                if (client && client.address) {
+                    finalValues.address = client.address;
+                }
+            }
+
+            let slaHours: number | undefined = undefined;
+            if (values.hasCustomSla && values.customSlaHours) {
+                slaHours = values.customSlaHours;
+            } else if (selectedClientSla) {
+                slaHours = selectedClientSla;
+            }
+
+            if (slaHours) {
+                const now = new Date();
+                finalValues.slaExpiresAt = addHours(now, slaHours).toISOString();
+            }
+
+            if (values.checklistId) {
+                const selectedChecklist = checklists.find(c => c.id === values.checklistId);
+                if(selectedChecklist) {
+                    finalValues.checklist = selectedChecklist.tasks.map(task => ({ taskId: task.id, completed: false }));
+                }
+            }
+            
+            await onSave(finalValues);
+        } catch (error) {
+            console.error("An error occurred during save:", error);
+            // Toast is handled in the parent component
+        } finally {
+            setIsSaving(false);
         }
-        
-        onSave(finalValues);
     }
+
 
     const isAddressVisible = addressMode === 'manual';
 
@@ -410,7 +470,29 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
 
                     <div className="space-y-3">
                         <FormLabel>Tipo de Atendimento</FormLabel>
-                        <div className="flex flex-col sm:flex-row gap-4">
+                        <div className="flex flex-wrap gap-4 items-center">
+                            <FormField
+                                control={form.control}
+                                name="isStandard"
+                                render={({ field }) => (
+                                <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-4">
+                                    <FormControl>
+                                    <Checkbox
+                                        checked={field.value}
+                                        onCheckedChange={(checked) => {
+                                            field.onChange(checked);
+                                            if (checked) {
+                                                form.setValue('isContract', false);
+                                            }
+                                        }}
+                                    />
+                                    </FormControl>
+                                    <FormLabel className="font-normal">
+                                        Padrão
+                                    </FormLabel>
+                                </FormItem>
+                                )}
+                            />
                              <FormField
                                 control={form.control}
                                 name="isContract"
@@ -419,7 +501,12 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                                     <FormControl>
                                     <Checkbox
                                         checked={field.value}
-                                        onCheckedChange={field.onChange}
+                                        onCheckedChange={(checked) => {
+                                            field.onChange(checked);
+                                            if (checked) {
+                                                form.setValue('isStandard', false);
+                                            }
+                                        }}
                                     />
                                     </FormControl>
                                     <FormLabel className="font-normal">
@@ -446,6 +533,39 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                                 )}
                             />
                         </div>
+                        {isContract && (
+                            <FormField
+                                control={form.control}
+                                name="contractPriority"
+                                render={({ field }) => (
+                                <FormItem className="space-y-3 pt-2">
+                                    <FormLabel>Prioridade do Contrato</FormLabel>
+                                    <FormControl>
+                                    <RadioGroup
+                                        onValueChange={field.onChange}
+                                        defaultValue={field.value}
+                                        className="flex flex-wrap gap-x-4 gap-y-2"
+                                    >
+                                        <FormItem className="flex items-center space-x-2 space-y-0">
+                                        <FormControl><RadioGroupItem value="Normal" /></FormControl>
+                                        <FormLabel className="font-normal">Normal</FormLabel>
+                                        </FormItem>
+                                        <FormItem className="flex items-center space-x-2 space-y-0">
+                                        <FormControl><RadioGroupItem value="Alta" /></FormControl>
+                                        <FormLabel className="font-normal">Alta</FormLabel>
+                                        </FormItem>
+                                        <FormItem className="flex items-center space-x-2 space-y-0">
+                                        <FormControl><RadioGroupItem value="Extrema" /></FormControl>
+                                        <FormLabel className="font-normal">Extrema</FormLabel>
+                                        </FormItem>
+                                    </RadioGroup>
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                                )}
+                            />
+                        )}
+                         <FormMessage>{form.formState.errors.isStandard?.message}</FormMessage>
                     </div>
                     
                     <FormField
@@ -521,9 +641,14 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                         value={addressMode}
                         className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 py-2"
                     >
-                        <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="api" id="api" />
-                            <label htmlFor="api">Usar endereço do cliente</label>
+                        <div className={cn(
+                            "flex items-center space-x-2",
+                            !selectedClientId && "text-muted-foreground cursor-not-allowed"
+                        )}>
+                            <RadioGroupItem value="api" id="api" disabled={!selectedClientId} />
+                            <label htmlFor="api" className={cn(!selectedClientId && "cursor-not-allowed")}>
+                                Usar endereço do cliente
+                            </label>
                         </div>
                         <div className="flex items-center space-x-2">
                             <RadioGroupItem value="manual" id="manual" />
@@ -626,6 +751,7 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                                     onValueChange={(value) => {
                                         field.onChange(value)
                                         form.setValue('assigneeId', undefined)
+                                        form.setValue('checklistId', undefined)
                                     }} 
                                     value={field.value}
                                 >
@@ -659,9 +785,9 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                                     </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                    {filteredTechnicians.map((technician) => (
-                                    <SelectItem key={technician.id} value={technician.id}>
-                                        {technician.name}
+                                    {assignableUsers.map((user) => (
+                                    <SelectItem key={user.id} value={user.id}>
+                                        {user.name}
                                     </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -671,7 +797,35 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                             )}
                         />
                     </div>
-                    <Separator className="my-4"/>
+                    <div className="space-y-4 rounded-lg border border-blue-500/50 bg-blue-500/10 p-4">
+                        <h4 className="text-md font-semibold text-blue-800 dark:text-blue-300 flex items-center">
+                            <ListChecks className="h-5 w-5 mr-2"/>
+                            Checklist (Opcional)
+                        </h4>
+                        <FormField
+                            control={form.control}
+                            name="checklistId"
+                            render={({ field }) => (
+                            <FormItem>
+                                <Select onValueChange={field.onChange} value={field.value} disabled={!selectedSectorId}>
+                                <FormControl>
+                                    <SelectTrigger className="bg-background/50">
+                                    <SelectValue placeholder={!selectedSectorId ? "Selecione um setor primeiro" : "Selecione um checklist"} />
+                                    </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                    {filteredChecklists.map((checklist) => (
+                                    <SelectItem key={checklist.id} value={checklist.id}>
+                                        {checklist.name}
+                                    </SelectItem>
+                                    ))}
+                                </SelectContent>
+                                </Select>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
+                     </div>
                      <div className="space-y-4 rounded-lg border border-amber-500/50 bg-amber-500/10 p-4">
                         <h4 className="text-md font-semibold text-amber-800 dark:text-amber-300 flex items-center">
                             <AlertTriangle className="h-5 w-5 mr-2"/>
@@ -727,35 +881,67 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                             render={({ field }) => (
                             <FormItem className="flex flex-col">
                                 <FormLabel>Agendar Data (Opcional)</FormLabel>
-                                <Popover>
-                                <PopoverTrigger asChild>
-                                    <FormControl>
-                                    <Button
-                                        variant={"outline"}
-                                        className={cn(
-                                        "w-full pl-3 text-left font-normal",
-                                        !field.value && "text-muted-foreground"
-                                        )}
-                                    >
-                                        {field.value ? (
-                                        format(field.value, "PPP", { locale: ptBR })
-                                        ) : (
-                                        <span>Escolha uma data</span>
-                                        )}
-                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                    </Button>
-                                    </FormControl>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start">
-                                    <Calendar
-                                    mode="single"
-                                    selected={field.value}
-                                    onSelect={field.onChange}
-                                    initialFocus
-                                    locale={ptBR}
-                                    />
-                                </PopoverContent>
-                                </Popover>
+                                {isMobile ? (
+                                    <Dialog>
+                                        <DialogTrigger asChild>
+                                            <FormControl>
+                                            <Button
+                                                variant={"outline"}
+                                                className={cn(
+                                                "w-full pl-3 text-left font-normal",
+                                                !field.value && "text-muted-foreground"
+                                                )}
+                                            >
+                                                {field.value ? (
+                                                format(field.value, "PPP", { locale: ptBR })
+                                                ) : (
+                                                <span>Escolha uma data</span>
+                                                )}
+                                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                            </Button>
+                                            </FormControl>
+                                        </DialogTrigger>
+                                        <DialogContent className="w-auto">
+                                             <Calendar
+                                                mode="single"
+                                                selected={field.value}
+                                                onSelect={field.onChange}
+                                                initialFocus
+                                                locale={ptBR}
+                                                />
+                                        </DialogContent>
+                                    </Dialog>
+                                ) : (
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <FormControl>
+                                            <Button
+                                                variant={"outline"}
+                                                className={cn(
+                                                "w-full pl-3 text-left font-normal",
+                                                !field.value && "text-muted-foreground"
+                                                )}
+                                            >
+                                                {field.value ? (
+                                                format(field.value, "PPP", { locale: ptBR })
+                                                ) : (
+                                                <span>Escolha uma data</span>
+                                                )}
+                                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                            </Button>
+                                            </FormControl>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0" align="start">
+                                            <Calendar
+                                            mode="single"
+                                            selected={field.value}
+                                            onSelect={field.onChange}
+                                            initialFocus
+                                            locale={ptBR}
+                                            />
+                                        </PopoverContent>
+                                    </Popover>
+                                )}
                                 <FormMessage />
                             </FormItem>
                             )}
@@ -781,7 +967,7 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
             <div className="flex justify-between gap-2 pt-4 border-t">
                 <div>
                   {currentStep > 1 && (
-                      <Button type="button" variant="outline" onClick={handlePreviousStep}>
+                      <Button type="button" variant="outline" onClick={handlePreviousStep} disabled={isSaving}>
                           <ArrowLeft className="mr-2 h-4 w-4" />
                           Anterior
                       </Button>
@@ -789,15 +975,18 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                 </div>
 
                 <div className="flex gap-2">
-                  <Button type="button" variant="ghost" onClick={onFinished}>Cancelar</Button>
+                  <Button type="button" variant="ghost" onClick={onFinished} disabled={isSaving}>Cancelar</Button>
                   {currentStep < 3 && (
-                      <Button type="button" onClick={handleNextStep}>
+                      <Button type="button" onClick={handleNextStep} disabled={isSaving}>
                           Próximo
                           <ArrowRight className="ml-2 h-4 w-4" />
                       </Button>
                   )}
                   {currentStep === 3 && (
-                      <Button type="submit">Salvar Chamado</Button>
+                      <Button type="submit" disabled={isSaving}>
+                          {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          {isSaving ? "Salvando..." : "Salvar Chamado"}
+                      </Button>
                   )}
                 </div>
             </div>

@@ -1,10 +1,10 @@
 
 "use client"
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Loader2 } from "lucide-react";
+import { PlusCircle, Loader2, RefreshCw } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -12,63 +12,71 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { ServiceContract, Client, Sector, ExternalTicket } from "@/lib/types";
-import { collection, addDoc, onSnapshot, doc, updateDoc, writeBatch } from "firebase/firestore";
+import { ServiceContract, Client, Sector, ExternalTicket, Checklist, ChecklistTaskState } from "@/lib/types";
+import { collection, addDoc, onSnapshot, doc, updateDoc, writeBatch, getDoc } from "firebase/firestore";
 import { db } from "@/firebase/config";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { ContractsTable } from "@/components/contracts/contracts-table";
 import { NewContractForm, NewContractFormValues } from "@/components/contracts/new-contract-form";
-import { EditContractForm, EditContractFormValues } from "@/components/contracts/edit-contract-form";
+import { EditContractFormValues } from "@/components/contracts/edit-contract-form";
+import { generatePreventiveTickets } from "@/lib/services/preventive-maintenance-service";
+
 
 export default function ContractsPage() {
   const [isNewDialogOpen, setIsNewDialogOpen] = useState(false);
   const [contracts, setContracts] = useState<ServiceContract[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
+  const [checklists, setChecklists] = useState<Checklist[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isChecking, setIsChecking] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
 
   useEffect(() => {
     setLoading(true);
-    const unsubContracts = onSnapshot(collection(db, "serviceContracts"), 
-      (querySnapshot) => {
-        setContracts(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ServiceContract)));
-        if (!clients.length || !sectors.length) return;
-        setLoading(false);
-      }, 
-      (error) => {
-        console.error("Error fetching contracts:", error);
-        toast({ variant: 'destructive', title: "Erro ao buscar contratos"});
-        setLoading(false);
-      }
-    );
     
-    const unsubClients = onSnapshot(collection(db, "clients"), 
-      (querySnapshot) => {
-        setClients(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client)));
-        if (!contracts.length || !sectors.length) return;
-        setLoading(false);
-      }
-    );
-    
-    const unsubSectors = onSnapshot(collection(db, "sectors"), 
-      (querySnapshot) => {
-        setSectors(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sector)));
-        if (!contracts.length || !clients.length) return;
-        setLoading(false);
-      }
-    );
+    const unsubContracts = onSnapshot(collection(db, "serviceContracts"), (snapshot) => {
+        setContracts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ServiceContract)));
+    });
+    const unsubClients = onSnapshot(collection(db, "clients"), (snapshot) => {
+        setClients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client)));
+    });
+    const unsubSectors = onSnapshot(collection(db, "sectors"), (snapshot) => {
+        setSectors(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sector)));
+    });
+    const unsubChecklists = onSnapshot(collection(db, "checklists"), (snapshot) => {
+        setChecklists(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Checklist)));
+    });
+
+
+    // Simple timeout to avoid UI shift on fast connections
+    const timer = setTimeout(() => setLoading(false), 500);
 
     return () => {
         unsubContracts();
         unsubClients();
         unsubSectors();
-    }
-  }, [toast, clients.length, sectors.length, contracts.length]);
+        unsubChecklists();
+        clearTimeout(timer);
+    };
+  }, []);
 
-  const handleAddContract = async (values: NewContractFormValues) => {
+  const filteredContracts = useMemo(() => {
+    if (!user) return [];
+    if (user.role === 'admin' || user.role === 'gerente') {
+      return contracts;
+    }
+    if (user.role === 'encarregado' && user.sectorIds) {
+      return contracts.filter(contract => 
+        contract.sectorIds.some(sectorId => user.sectorIds!.includes(sectorId))
+      );
+    }
+    return []; // Return empty for other roles like 'tecnico'
+  }, [contracts, user]);
+
+  const handleAddContract = useCallback(async (values: NewContractFormValues) => {
     if (!user) {
         toast({ variant: 'destructive', title: "Erro de Autenticação"});
         return;
@@ -78,50 +86,62 @@ export default function ContractsPage() {
         toast({ variant: 'destructive', title: "Cliente ou endereço não encontrado"});
         return;
     }
+    
     try {
       const batch = writeBatch(db);
+      const now = new Date();
 
       const newContractData: Omit<ServiceContract, 'id'> = {
         clientId: values.clientId,
         clientName: client.name,
+        description: values.description,
         sectorIds: values.sectorIds,
         frequencyDays: values.frequencyDays,
         status: 'active',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+        ...(values.defaultChecklists && { defaultChecklists: values.defaultChecklists }),
       };
       
       const contractRef = doc(collection(db, "serviceContracts"));
       batch.set(contractRef, newContractData);
       
-      // Update the client document with the contract info
-      const clientRef = doc(db, "clients", client.id);
-      batch.update(clientRef, {
-        preventiveContract: {
-          sectorIds: values.sectorIds,
-          frequencyDays: values.frequencyDays,
-        }
-      });
-      
-      // Create initial tickets for each sector in the contract
+      // Create an immediate "start" ticket for each sector in the contract
       for (const sectorId of values.sectorIds) {
           const ticketRef = doc(collection(db, "external-tickets"));
+          
+          let checklistState: ChecklistTaskState[] | undefined = undefined;
+          const defaultChecklistId = values.defaultChecklists?.[sectorId];
+          
+          if(defaultChecklistId) {
+            const checklist = checklists.find(c => c.id === defaultChecklistId);
+            if (checklist) {
+                checklistState = checklist.tasks.map(task => ({
+                  taskId: task.id,
+                  completed: false,
+                  observation: '',
+                  photo: ''
+                }));
+            }
+          }
+
           const newTicketData: Omit<ExternalTicket, 'id'> = {
               client: {
                 id: client.id,
                 name: client.name,
                 phone: client.phone,
                 address: `${client.address.street}, ${client.address.number || 'S/N'}`,
-                isWhats: false, // Pode ser um padrão ou vir do form
+                isWhats: false,
               },
               requesterName: 'Sistema (Criação de Contrato)',
               sectorId: sectorId,
               creatorId: user.id,
-              description: `Chamado inicial de manutenção preventiva (Contrato ${contractRef.id.substring(0, 5)}).`,
+              description: `Manutenção preventiva de contrato.`,
               type: 'contrato',
               status: 'pendente',
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
+              createdAt: now.toISOString(),
+              updatedAt: now.toISOString(),
+              ...(defaultChecklistId && { checklistId: defaultChecklistId, checklist: checklistState })
           };
           batch.set(ticketRef, newTicketData);
       }
@@ -130,7 +150,7 @@ export default function ContractsPage() {
       
       toast({
         title: "Contrato e chamados iniciais criados!",
-        description: `O contrato para ${client.name} e os chamados preventivos foram gerados.`,
+        description: `O contrato para ${client.name} e os primeiros chamados preventivos foram gerados.`,
       });
       setIsNewDialogOpen(false);
 
@@ -142,29 +162,19 @@ export default function ContractsPage() {
         description: "Ocorreu um erro ao salvar os dados. Tente novamente.",
       });
     }
-  };
+  }, [user, clients, checklists, toast]);
 
-  const handleUpdateContract = async (contractId: string, values: EditContractFormValues) => {
-    const batch = writeBatch(db);
+  const handleUpdateContract = useCallback(async (contractId: string, values: EditContractFormValues, newStatus: 'active' | 'inactive') => {
     const contractRef = doc(db, "serviceContracts", contractId);
     
     try {
-        const contractSnap = await doc(db, "serviceContracts", contractId).get();
-        const contractData = contractSnap.data() as ServiceContract;
-        const clientRef = doc(db, "clients", contractData.clientId);
-        
         const updatedData = { 
             ...values,
+            status: newStatus,
             updatedAt: new Date().toISOString(),
         };
 
-        batch.update(contractRef, updatedData);
-        batch.update(clientRef, {
-           'preventiveContract.frequencyDays': values.frequencyDays,
-           'preventiveContract.sectorIds': values.sectorIds,
-        });
-
-        await batch.commit();
+        await updateDoc(contractRef, updatedData);
         toast({ title: "Contrato atualizado com sucesso!" });
         return true;
     } catch (error) {
@@ -172,48 +182,61 @@ export default function ContractsPage() {
         toast({ variant: 'destructive', title: "Erro ao atualizar contrato" });
         return false;
     }
-  };
-  
-  const handleStatusChange = async (contract: ServiceContract, newStatus: 'active' | 'inactive') => {
-    const contractRef = doc(db, "serviceContracts", contract.id);
+  }, [toast]);
+
+  const handleManualCheck = useCallback(async () => {
+    setIsChecking(true);
+    toast({ title: "Verificando preventivas...", description: "Aguarde, o sistema está buscando por chamados vencidos."});
     try {
-        await updateDoc(contractRef, { status: newStatus });
+      const result = await generatePreventiveTickets();
+      if (result.createdTicketsCount > 0) {
         toast({
-            title: "Status do Contrato Atualizado!",
-            description: `O contrato para ${contract.clientName} foi ${newStatus === 'active' ? 'reativado' : 'desativado'}.`,
+          title: "Verificação Concluída!",
+          description: `${result.createdTicketsCount} novo(s) chamado(s) preventivo(s) foram criados.`
         });
+      } else {
+        toast({
+          title: "Nenhuma Pendência",
+          description: "Não há chamados preventivos vencidos para serem criados no momento."
+        });
+      }
     } catch (error) {
-        console.error("Error updating contract status: ", error);
-        toast({
-            variant: "destructive",
-            title: "Erro ao atualizar status",
-            description: "Ocorreu um erro ao alterar o status do contrato.",
-        });
+      console.error("Error during manual check:", error);
+      toast({ variant: 'destructive', title: "Erro na verificação", description: "Ocorreu um erro ao executar a verificação manual." });
+    } finally {
+      setIsChecking(false);
     }
-  };
+  }, [toast]);
 
   return (
     <>
       <PageHeader title="Contratos de Serviço" description="Gerencie os contratos de manutenção preventiva dos clientes.">
-        <Dialog open={isNewDialogOpen} onOpenChange={setIsNewDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Novo Contrato
+        <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={handleManualCheck} disabled={isChecking}>
+                {isChecking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                Verificar Preventivas Agora
             </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-xl">
-            <DialogHeader>
-              <DialogTitle>Novo Contrato de Serviço</DialogTitle>
-            </DialogHeader>
-            <NewContractForm 
-                clients={clients.filter(c => c.status === 'active')} 
-                sectors={sectors.filter(s => s.status === 'active')}
-                onSave={handleAddContract} 
-                onFinished={() => setIsNewDialogOpen(false)} 
-            />
-          </DialogContent>
-        </Dialog>
+            <Dialog open={isNewDialogOpen} onOpenChange={setIsNewDialogOpen}>
+            <DialogTrigger asChild>
+                <Button>
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Novo Contrato
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-xl">
+                <DialogHeader>
+                <DialogTitle>Novo Contrato de Serviço</DialogTitle>
+                </DialogHeader>
+                <NewContractForm 
+                    clients={clients.filter(c => c.status === 'active')} 
+                    sectors={sectors.filter(s => s.status === 'active')}
+                    checklists={checklists}
+                    onSave={handleAddContract} 
+                    onFinished={() => setIsNewDialogOpen(false)} 
+                />
+            </DialogContent>
+            </Dialog>
+        </div>
       </PageHeader>
       {loading ? (
         <div className="flex justify-center items-center h-64">
@@ -221,9 +244,9 @@ export default function ContractsPage() {
         </div>
       ) : (
         <ContractsTable 
-          data={contracts}
+          data={filteredContracts}
           sectors={sectors}
-          onStatusChange={handleStatusChange}
+          checklists={checklists}
           onUpdateContract={handleUpdateContract}
         />
       )}

@@ -17,6 +17,7 @@ export interface ModulePermissions {
   technicians: PermissionLevel;
   location: PermissionLevel;
   monitoring: PermissionLevel;
+  checklists: PermissionLevel;
 }
 
 export type MobileNavPreferences = {
@@ -29,6 +30,21 @@ export type MobileNavPreferences = {
     planning?: boolean;
     history?: boolean;
     reports?: boolean;
+}
+
+// Representa a inscrição para notificações push
+export interface PushSubscription {
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+}
+
+export interface RouteHistoryEntry {
+  date: string; // YYYY-MM-DD
+  routeOrder: string[];
+  finishedAt?: string;
 }
 
 export interface User {
@@ -46,6 +62,9 @@ export interface User {
   mobileNavPreferences?: MobileNavPreferences;
   euroInfoId?: string;
   rondoInfoId?: string;
+  pushSubscriptions?: PushSubscription[];
+  routeOrder?: string[];
+  routeHistory?: RouteHistoryEntry[];
 }
 
 export interface Sector {
@@ -54,14 +73,9 @@ export interface Sector {
   code: string;
   description?: string;
   status: 'active' | 'archived';
+  whatsappGroupId?: string;
   euroInfoId?: string;
   rondoInfoId?: string;
-}
-
-export interface RouteHistoryEntry {
-  date: string; // YYYY-MM-DD
-  routeOrder: string[];
-  finishedAt?: string;
 }
 
 export interface Technician {
@@ -95,7 +109,9 @@ export interface ServiceContract {
   id: string;
   clientId: string;
   clientName: string;
+  description?: string;
   sectorIds: string[];
+  defaultChecklists?: Record<string, string>; // sectorId: checklistId
   frequencyDays: number;
   status: 'active' | 'inactive';
   createdAt: string;
@@ -135,6 +151,13 @@ export interface TechnicalReport {
     signature?: string; // Data URL of the signature image
 }
 
+export interface ChecklistTaskState {
+    taskId: string;
+    completed: boolean;
+    photo?: string; // URL da foto de evidência
+    observation?: string;
+}
+
 export interface ExternalTicket {
   id: string;
   client: {
@@ -147,26 +170,30 @@ export interface ExternalTicket {
   requesterName?: string;
   sectorId: string;
   creatorId: string;
-  technicianId?: string;
+  technicianId?: string | null;
+  finalizedBy?: string;
   description: string;
   type: 'padrão' | 'contrato' | 'urgente' | 'agendado' | 'retorno';
+  priority?: 'Normal' | 'Alta' | 'Extrema';
   status: 'pendente' | 'em andamento' | 'concluído' | 'cancelado';
   scheduledTo?: string;
   createdAt: string;
   updatedAt: string;
-  slaExpiresAt?: string;
+  slaExpiresAt?: string | null;
   checkIn?: {
     ticketId: string;
     timestamp: string;
-  };
+  } | null;
   checkOut?: {
     ticketId: string;
     timestamp: string;
-  };
-  enRoute?: boolean;
-  enRouteAt?: string;
+  } | null;
+  enRoute?: boolean | null;
+  enRouteAt?: string | null;
   comments?: Comment[];
-  technicalReport?: TechnicalReport;
+  technicalReport?: TechnicalReport | null;
+  checklistId?: string;
+  checklist?: ChecklistTaskState[];
 }
 
 export interface InternalTicket {
@@ -213,12 +240,20 @@ export interface TicketReportSummary {
   improvementSuggestions: string;
 }
 
+export interface ProjectedEventResource {
+  id: string;
+  clientName: string;
+  clientId: string;
+  sectorId: string;
+  status: 'previsto';
+}
+
 export interface CalendarEvent {
   title: string;
   start: Date;
   end: Date;
-  resource: ExternalTicket | InternalTicket;
-  type: 'external' | 'internal';
+  resource: ExternalTicket | InternalTicket | ProjectedEventResource;
+  type: 'external' | 'internal' | 'projected';
 }
 
 export interface PreventiveRoutePlan {
@@ -231,4 +266,20 @@ export interface PreventiveRoutePlan {
     }[];
   }[];
   summary: string;
+}
+
+export interface ChecklistTask {
+  id: string;
+  text: string;
+}
+
+export interface Checklist {
+  id: string;
+  name: string;
+  description?: string;
+  sectorId: string;
+  tasks: ChecklistTask[];
+  status: 'active' | 'archived';
+  createdAt: string;
+  updatedAt: string;
 }

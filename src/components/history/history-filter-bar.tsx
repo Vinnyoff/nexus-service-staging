@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useMemo } from 'react';
@@ -7,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Search } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Technician, User } from '@/lib/types';
+import { User } from '@/lib/types';
 
 export interface HistoryFilters {
   startDate?: Date;
@@ -18,33 +19,21 @@ export interface HistoryFilters {
 interface HistoryFilterBarProps {
   filters: HistoryFilters;
   onFilterChange: (filters: HistoryFilters) => void;
-  allTechnicians: Technician[];
   allUsers: User[];
 }
 
 export function HistoryFilterBar({ 
   filters, 
   onFilterChange, 
-  allTechnicians,
   allUsers
 }: HistoryFilterBarProps) {
   const { user } = useAuth();
   
-  const canFilterByTechnician = user?.role === 'admin' || user?.role === 'gerente' || user?.role === 'encarregado';
+  const canFilterByTechnician = user?.role === 'admin' || user?.role === 'gerente';
 
   const visibleTechnicians = useMemo(() => {
-    if (!user) return [];
-    if (user.role === 'admin' || user.role === 'gerente') {
-        return allTechnicians;
-    }
-    if (user.role === 'encarregado' && user.sectorIds) {
-        // Encarregado sees technicians that belong to any of his sectors.
-        return allTechnicians.filter(tech => 
-            tech.sectorIds && tech.sectorIds.some(techSectorId => user.sectorIds!.includes(techSectorId))
-        );
-    }
-    return [];
-  }, [user, allTechnicians]);
+    return allUsers.filter(u => u.role === 'tecnico' || u.role === 'encarregado');
+  }, [allUsers]);
 
 
   const handleFilter = () => {

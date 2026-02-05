@@ -3,11 +3,12 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from '@/hooks/use-auth';
 import { ThemeProvider } from '@/components/theme-provider';
+import { GoogleAnalytics } from '@/components/google-analytics';
 
 export const metadata: Metadata = {
   title: 'Nexus Service',
   description: 'Sistema completo de gestão Nexus Service',
-  manifest: "/manifest.webmanifest",
+  manifest: "/manifest.json",
 };
 
 export default function RootLayout({
@@ -24,6 +25,7 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
       </head>
       <body className="font-body antialiased">
+        <GoogleAnalytics />
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

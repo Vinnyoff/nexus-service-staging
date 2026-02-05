@@ -26,7 +26,6 @@ import { EditTechnicianFormValues } from "@/components/technicians/edit-technici
 
 export default function TechniciansPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [loading, setLoading] = useState(true);
   const [sectorFilter, setSectorFilter] = useState<string>('all');
@@ -34,90 +33,84 @@ export default function TechniciansPage() {
   const { user: adminUser } = useAuth(); 
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [rawTechnicians, setRawTechnicians] = useState<Technician[]>([]);
-
-  const filterVisibleTechnicians = useCallback((techs: Technician[], currentUser: User | null): Technician[] => {
-    if (!currentUser) return [];
-
-    if (currentUser.role === 'admin' || currentUser.role === 'gerente') {
-        return techs;
-    }
-    if (currentUser.role === 'encarregado') {
-        const userSectorIds = currentUser.sectorIds || [];
-        return userSectorIds.length > 0 
-            ? techs.filter(tech => tech.sectorIds && tech.sectorIds.some(techSectorId => userSectorIds.includes(techSectorId)))
-            : [];
-    }
-    return []; // Technicians cannot see this page.
-  }, []);
-
-  const combineTechniciansAndUsers = useCallback((techsData: Technician[], usersData: User[]): Technician[] => {
-    if (!adminUser) return [];
-    
-    return techsData.map(techData => {
-        const correspondingUser = usersData.find(u => u.id === techData.userId);
-        if (!correspondingUser) {
-            return null; // This technician's user doc might not exist yet or was deleted
-        }
-        return {
-            ...correspondingUser, // User data comes first
-            ...techData,        // Technician data overwrites, preserving specific technician fields
-            id: techData.id,    // Ensure technician ID (which is the same as userId) is correct
-        };
-    }).filter(Boolean) as Technician[]; // Filter out nulls
-  }, [adminUser]);
-
+  
   useEffect(() => {
     setLoading(true);
 
-    const collectionsToFetch = [
-        { name: 'technicians', setter: setRawTechnicians },
-        { name: 'users', setter: setAllUsers },
-        { name: 'sectors', setter: setSectors },
-    ];
+    const unsubTechnicians = onSnapshot(query(collection(db, "technicians")), 
+        (snapshot) => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Technician[];
+            setRawTechnicians(data);
+        }
+    );
 
-    let loadedCount = 0;
-    const totalCollections = collectionsToFetch.length;
+    const unsubUsers = onSnapshot(query(collection(db, "users")),
+        (snapshot) => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as User[];
+            setAllUsers(data);
+        }
+    );
+    
+    const unsubSectors = onSnapshot(query(collection(db, "sectors")),
+        (snapshot) => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Sector[];
+            setSectors(data);
+        }
+    );
 
-    const unsubscribes = collectionsToFetch.map(({ name, setter }) => {
-        const q = query(collection(db, name));
-        return onSnapshot(q, 
-            (snapshot) => {
-                const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any;
-                setter(data);
-            },
-            (error) => {
-                console.warn(`A coleção '${name}' não foi encontrada ou ocorreu um erro. Tratando como vazia.`, error);
-                setter([]); 
-            }
-        );
-    });
+    const timer = setTimeout(() => {
+        if (loading) {
+            setLoading(false);
+        }
+    }, 2000);
 
     return () => {
-        unsubscribes.forEach(unsub => unsub());
+        unsubTechnicians();
+        unsubUsers();
+        unsubSectors();
+        clearTimeout(timer);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
 
-  useEffect(() => {
-      // This effect now ONLY combines data and sets the final loading state
-      if (rawTechnicians.length > 0 && allUsers.length > 0 && sectors.length > 0) {
-          const combined = combineTechniciansAndUsers(rawTechnicians, allUsers);
-          const visible = filterVisibleTechnicians(combined, adminUser);
-          setTechnicians(visible);
-          setLoading(false);
-      } else if (!loading && (rawTechnicians.length === 0 || allUsers.length === 0)) {
-          // If we're not loading but some data is missing, it means there are no technicians/users to show.
-          // This prevents getting stuck on the loading screen.
-          setTechnicians([]);
-          setLoading(false);
-      }
-  }, [rawTechnicians, allUsers, sectors, adminUser, combineTechniciansAndUsers, filterVisibleTechnicians, loading]);
+ const combinedTechnicians = useMemo(() => {
+    if (!rawTechnicians.length || !allUsers.length) return [];
+    
+    return rawTechnicians.map(techData => {
+        const correspondingUser = allUsers.find(u => u.id === techData.userId);
+        if (!correspondingUser) {
+            return null;
+        }
+        return {
+            ...correspondingUser,
+            ...techData,
+            id: techData.id,
+        };
+    }).filter(Boolean) as Technician[];
+  }, [rawTechnicians, allUsers]);
+
+  const visibleTechnicians = useMemo(() => {
+     if (!adminUser) return [];
+
+    if (adminUser.role === 'admin' || adminUser.role === 'gerente') {
+        return combinedTechnicians;
+    }
+    if (adminUser.role === 'encarregado') {
+        const userSectorIds = adminUser.sectorIds || [];
+        return userSectorIds.length > 0 
+            ? combinedTechnicians.filter(tech => tech.sectorIds && tech.sectorIds.some(techSectorId => userSectorIds.includes(techSectorId)))
+            : [];
+    }
+    return []; // Technicians cannot see this page.
+  }, [combinedTechnicians, adminUser]);
+
   
   const filteredTechnicians = useMemo(() => {
     if (sectorFilter === 'all') {
-        return technicians;
+        return visibleTechnicians;
     }
-    return technicians.filter(tech => tech.sectorIds && tech.sectorIds.includes(sectorFilter));
-  }, [technicians, sectorFilter]);
+    return visibleTechnicians.filter(tech => tech.sectorIds && tech.sectorIds.includes(sectorFilter));
+  }, [visibleTechnicians, sectorFilter]);
 
 
   const handleAddTechnician = async (values: NewTechnicianFormValues) => {
@@ -156,7 +149,6 @@ export default function TechniciansPage() {
         euroInfoId: values.euroInfoId,
         rondoInfoId: values.rondoInfoId,
       };
-      // The ID for the technician document is the same as the user ID
       await setDoc(doc(db, "technicians", newUserId), newTechnician);
       
       setIsDialogOpen(false);
@@ -178,7 +170,7 @@ export default function TechniciansPage() {
     }
   };
   
-    const handleUpdateTechnician = async (technicianId: string, values: EditTechnicianFormValues) => {
+  const handleUpdateTechnician = async (technicianId: string, values: EditTechnicianFormValues, newStatus: UserStatus) => {
     const batch = writeBatch(db);
     const techRef = doc(db, "technicians", technicianId);
     const userRef = doc(db, "users", technicianId);
@@ -189,6 +181,7 @@ export default function TechniciansPage() {
         sectorIds: values.sectorIds,
         euroInfoId: values.euroInfoId,
         rondoInfoId: values.rondoInfoId,
+        status: newStatus,
         updatedAt: new Date().toISOString(),
     };
     
@@ -198,6 +191,7 @@ export default function TechniciansPage() {
         sectorIds: values.sectorIds,
         euroInfoId: values.euroInfoId,
         rondoInfoId: values.rondoInfoId,
+        status: newStatus,
     });
 
     try {
@@ -222,29 +216,6 @@ export default function TechniciansPage() {
     } catch (error) {
         console.error("Error updating permissions:", error);
         toast({ variant: "destructive", title: "Erro ao salvar permissões" });
-    }
-  };
-  
-  const handleStatusChange = async (technician: Technician, newStatus: UserStatus) => {
-    const batch = writeBatch(db);
-    const techRef = doc(db, "technicians", technician.id);
-    const userRef = doc(db, "users", technician.id);
-
-    batch.update(techRef, { status: newStatus });
-    batch.update(userRef, { status: newStatus });
-
-    try {
-        await batch.commit();
-        toast({
-            title: "Status do Técnico Atualizado!",
-            description: `O técnico ${technician.name} foi ${newStatus === 'active' ? 'reativado' : 'desativado'}.`,
-        });
-    } catch (error) {
-        console.error("Error updating technician status:", error);
-        toast({
-            variant: "destructive",
-            title: "Erro ao atualizar status",
-        });
     }
   };
 
@@ -285,9 +256,7 @@ export default function TechniciansPage() {
         <TechniciansTable 
           data={filteredTechnicians} 
           sectors={sectors} 
-          onDataChange={setTechnicians} 
           onSavePermissions={handleUpdatePermissions}
-          onStatusChange={handleStatusChange}
           onUpdateTechnician={handleUpdateTechnician}
         />
       )}
