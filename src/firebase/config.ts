@@ -12,8 +12,10 @@ export const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Initialize Firebase safely
-const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+// Initialize Firebase safely — use placeholder during build/prerender if env vars absent
+const app = getApps().length
+  ? getApp()
+  : initializeApp({ ...firebaseConfig, apiKey: firebaseConfig.apiKey || 'build-placeholder' });
 
 export const db = getFirestore(app);
 export const storage = getStorage(app);
