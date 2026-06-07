@@ -21,8 +21,8 @@ export function NavLinks() {
     return item.roles.includes(user.role);
   }
 
-  const userPrimaryNavItems = primaryNavItems.filter(hasPermission);
-  const userSecondaryNavItems = secondaryNavItems.filter(hasPermission);
+  const userPrimaryNavItems = primaryNavItems.filter(item => !item.hidden && hasPermission(item));
+  const userSecondaryNavItems = secondaryNavItems.filter(item => !item.hidden && hasPermission(item));
 
 
   const renderItems = (items: typeof primaryNavItems) => {

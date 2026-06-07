@@ -1,13 +1,13 @@
 
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect, useRef } from 'react';
 import type { User } from '@/lib/types';
 import { useToast } from './use-toast';
 import app, { db } from '@/firebase/config';
-import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 
 interface AuthContextType {
   user: User | null;
@@ -25,51 +25,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const router = useRouter();
+  const isMockAdmin = useRef(false);
+  const isSigningOut = useRef(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (user?.id === 'mock-admin-id') {
+      if (isMockAdmin.current) {
         setLoading(false);
         return;
       }
-      
+
       if (firebaseUser) {
         try {
           const userDocRef = doc(db, "users", firebaseUser.uid);
-          let userDocSnap = await getDoc(userDocRef);
+          const userDocSnap = await getDoc(userDocRef);
 
           if (userDocSnap.exists()) {
             const appUser = { id: userDocSnap.id, ...userDocSnap.data() } as User;
-            
-            // Critical: Check if the user's status is active
+
             if (appUser.status === 'inactive') {
-                console.warn(`User ${firebaseUser.uid} is inactive. Signing out.`);
-                toast({
-                    variant: "destructive",
-                    title: "Acesso Negado",
-                    description: "Sua conta está inativa. Contate um administrador.",
-                });
-                await signOut(auth);
-                setUser(null);
+              console.warn(`User ${firebaseUser.uid} is inactive. Signing out.`);
+              toast({
+                variant: "destructive",
+                title: "Acesso Negado",
+                description: "Sua conta está inativa. Contate um administrador.",
+              });
+              await signOut(auth);
+              setUser(null);
             } else {
-                if (!appUser.sectorIds || !Array.isArray(appUser.sectorIds)) {
-                    appUser.sectorIds = [];
-                }
-                setUser(appUser);
+              if (!appUser.sectorIds || !Array.isArray(appUser.sectorIds)) {
+                appUser.sectorIds = [];
+              }
+              setUser(appUser);
             }
           } else {
             console.warn("User profile not found in Firestore for UID:", firebaseUser.uid);
             await signOut(auth);
             setUser(null);
           }
-        } catch (error) {
-          console.error("Error fetching user data from Firestore:", error);
-          toast({
-            variant: "destructive",
-            title: "Erro ao buscar dados",
-            description: "Não foi possível carregar seu perfil. Tente novamente.",
-          });
-          setUser(null);
+        } catch (error: any) {
+          // permission-denied during logout is expected — Firebase token is already revoked
+          if (error?.code === 'permission-denied' || isSigningOut.current) {
+            setUser(null);
+          } else {
+            console.error("Error fetching user data from Firestore:", error);
+            toast({
+              variant: "destructive",
+              title: "Erro ao buscar dados",
+              description: "Não foi possível carregar seu perfil. Tente novamente.",
+            });
+            setUser(null);
+          }
         }
       } else {
         setUser(null);
@@ -78,9 +84,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, [toast, user]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
+    isMockAdmin.current = false;
+    isSigningOut.current = false;
     try {
       await signInWithEmailAndPassword(auth, email, password);
       return true;
@@ -97,14 +106,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     if (user?.id === 'mock-admin-id') {
+      isMockAdmin.current = false;
       setUser(null);
       router.push('/login');
       return;
     }
     try {
-      await signOut(auth);
+      isSigningOut.current = true;
       setUser(null);
       router.push('/login');
+      await signOut(auth);
     } catch (error) {
       console.error("Logout Error:", error);
       toast({
@@ -112,6 +123,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         title: "Erro ao Sair",
         description: "Ocorreu um problema ao tentar fazer logout.",
       });
+    } finally {
+      isSigningOut.current = false;
     }
   };
 

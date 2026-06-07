@@ -17,8 +17,9 @@ import { TechniciansTable } from "@/components/technicians/technicians-table";
 import { Technician, Sector, User, ModulePermissions, UserStatus } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { collection, getDocs, doc, setDoc, updateDoc, writeBatch, onSnapshot, query } from "firebase/firestore";
-import { db } from "@/firebase/config";
-import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
+import { db, firebaseConfig } from "@/firebase/config";
+import { createUserWithEmailAndPassword, getAuth } from "firebase/auth";
+import { initializeApp, deleteApp } from "firebase/app";
 import { useAuth } from "@/hooks/use-auth";
 import { TechniciansFilterBar } from "@/components/technicians/technicians-filter-bar";
 import { EditTechnicianFormValues } from "@/components/technicians/edit-technician-form";
@@ -119,9 +120,10 @@ export default function TechniciansPage() {
         return;
     }
     
-    const auth = getAuth();
+    const secondaryApp = initializeApp(firebaseConfig, `create-tech-${Date.now()}`);
+    const secondaryAuth = getAuth(secondaryApp);
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
+      const userCredential = await createUserWithEmailAndPassword(secondaryAuth, values.email, values.password);
       const newUserId = userCredential.user.uid;
       
       const newUser: User = {
@@ -159,7 +161,7 @@ export default function TechniciansPage() {
 
     } catch (error: any) {
       console.error("Error adding technician:", error);
-      const errorMessage = error.code === 'auth/email-already-in-use' 
+      const errorMessage = error.code === 'auth/email-already-in-use'
             ? "Este email já está em uso por outra conta."
             : "Ocorreu um erro ao criar o técnico.";
       toast({
@@ -167,6 +169,8 @@ export default function TechniciansPage() {
         title: "Erro ao criar técnico",
         description: errorMessage,
       });
+    } finally {
+      await deleteApp(secondaryApp);
     }
   };
   

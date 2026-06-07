@@ -31,6 +31,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { EditContractForm, EditContractFormValues } from "./edit-contract-form"
+import { ContractHistoryTab } from "./contract-history-tab"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { format } from "date-fns"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select"
 import { useToast } from "@/hooks/use-toast"
@@ -276,18 +278,18 @@ export function ContractsTable({ data, sectors, checklists, onUpdateContract }: 
         </div>
       </div>
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-          <DialogContent className="sm:max-w-xl">
+          <DialogContent className="sm:max-w-2xl">
             {selectedContract && (
             <>
                 <DialogHeader>
-                    <DialogTitle>Editar Contrato: {selectedContract.clientName}</DialogTitle>
+                    <DialogTitle>Contrato: {selectedContract.clientName}</DialogTitle>
                     <div className="flex items-center gap-2 pt-2">
                         <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded">
                             ID: {selectedContract.id}
                         </span>
-                        <Button 
-                            variant="ghost" 
-                            size="icon" 
+                        <Button
+                            variant="ghost"
+                            size="icon"
                             className="h-6 w-6"
                             onClick={() => {
                                 navigator.clipboard.writeText(selectedContract.id);
@@ -298,13 +300,27 @@ export function ContractsTable({ data, sectors, checklists, onUpdateContract }: 
                         </Button>
                     </div>
                 </DialogHeader>
-                <EditContractForm 
-                    contract={selectedContract} 
-                    sectors={sectors}
-                    checklists={checklists}
-                    onSave={handleSaveEdit} 
-                    onFinished={() => setIsEditOpen(false)} 
-                />
+                <Tabs defaultValue="dados">
+                    <TabsList className="w-full">
+                        <TabsTrigger value="dados" className="flex-1">Dados do Contrato</TabsTrigger>
+                        <TabsTrigger value="historico" className="flex-1">Histórico de Atendimentos</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="dados">
+                        <EditContractForm
+                            contract={selectedContract}
+                            sectors={sectors}
+                            checklists={checklists}
+                            onSave={handleSaveEdit}
+                            onFinished={() => setIsEditOpen(false)}
+                        />
+                    </TabsContent>
+                    <TabsContent value="historico">
+                        <ContractHistoryTab
+                            contractId={selectedContract.id}
+                            sectors={sectors}
+                        />
+                    </TabsContent>
+                </Tabs>
             </>
             )}
           </DialogContent>

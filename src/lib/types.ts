@@ -168,7 +168,8 @@ export interface ExternalTicket {
     isWhats: boolean;
   };
   requesterName?: string;
-  sectorId: string;
+  sectorId?: string;
+  contractId?: string;
   creatorId: string;
   technicianId?: string | null;
   finalizedBy?: string;

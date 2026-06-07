@@ -19,7 +19,7 @@ export function BottomNavLinks() {
 
   const mobilePrefs = user.mobileNavPreferences || {};
   
-  const permittedItems = primaryNavItems.filter(hasPermission);
+  const permittedItems = primaryNavItems.filter(item => !item.hidden && hasPermission(item));
   
   // If user has set any preferences, use them. Otherwise, show all permitted items.
   const preferredItems = Object.keys(mobilePrefs).length > 0 

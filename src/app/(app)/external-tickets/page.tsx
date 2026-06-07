@@ -360,15 +360,23 @@ export default function ExternalTicketsPage() {
     try {
         const ticket = tickets.find(t => t.id === id);
         if (ticket) {
-            await updateDoc(ticketRef, {
+            const updatePayload: Record<string, any> = {
                 technicianId: user.id,
                 status: 'em andamento',
                 updatedAt: new Date().toISOString(),
-            });
-            
-            const sector = sectors.find(s => s.id === ticket.sectorId);
+            };
+
+            // Ao assumir um ticket sem setor, atribui o setor do usuário automaticamente
+            if (!ticket.sectorId && user.sectorIds?.length > 0) {
+                updatePayload.sectorId = user.sectorIds[0];
+            }
+
+            await updateDoc(ticketRef, updatePayload);
+
+            const claimedSectorId = ticket.sectorId || updatePayload.sectorId;
+            const sector = sectors.find(s => s.id === claimedSectorId);
             const sectorGroupId = sector?.whatsappGroupId;
-            
+
             const message = `🏃‍♂️ Chamado em Andamento 🏃‍♂️\n\n*Cliente:* ${ticket.client.name}\n*Status:* Em andamento por ${user.name}`;
             if (sectorGroupId) {
                 await sendWhatsappMessage(sectorGroupId, message);
@@ -560,7 +568,8 @@ export default function ExternalTicketsPage() {
   const filteredAndSortedTickets = useMemo(() => {
     const filtered = tickets.filter(ticket => {
         if (user?.role === 'encarregado' || user?.role === 'tecnico') {
-            if (!user.sectorIds?.includes(ticket.sectorId)) return false;
+            // Tickets sem sectorId (contrato sem setor definido) são visíveis para todos
+            if (ticket.sectorId && !user.sectorIds?.includes(ticket.sectorId)) return false;
         }
         
         const query = searchQuery.toLowerCase();

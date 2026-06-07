@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "studio-7906776988-e180b"
+    "default": "studio-7906776988-e180b",
+    "production": "studio-7906776988-e180b",
+    "staging": "euroinfo-chamados-dev"
   }
 }

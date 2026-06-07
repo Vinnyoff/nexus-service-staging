@@ -265,6 +265,7 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                 fieldsToValidate.push('address.street', 'address.neighborhood', 'address.city', 'address.state');
             }
         } else if (currentStep === 3) {
+            // Setor só é obrigatório para chamados não-contrato (validado no superRefine)
             fieldsToValidate = ['sectorId'];
         }
     
@@ -747,12 +748,12 @@ export function NewExternalTicketForm({ onFinished, onSave }: NewExternalTicketF
                             render={({ field }) => (
                             <FormItem>
                                 <FormLabel>Setor</FormLabel>
-                                <Select 
+                                <Select
                                     onValueChange={(value) => {
                                         field.onChange(value)
                                         form.setValue('assigneeId', undefined)
                                         form.setValue('checklistId', undefined)
-                                    }} 
+                                    }}
                                     value={field.value}
                                 >
                                 <FormControl>

@@ -16,9 +16,10 @@ import { NewUserForm, NewUserFormValues } from "@/components/users/new-user-form
 import { UsersTable } from "@/components/users/users-table";
 import { User, Sector, ModulePermissions, UserStatus } from "@/lib/types";
 import { collection, onSnapshot, setDoc, doc, updateDoc } from "firebase/firestore";
-import { db } from "@/firebase/config";
+import { db, firebaseConfig } from "@/firebase/config";
 import { useToast } from "@/hooks/use-toast";
-import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
+import { createUserWithEmailAndPassword, getAuth } from "firebase/auth";
+import { initializeApp, deleteApp } from "firebase/app";
 import { useAuth } from "@/hooks/use-auth";
 import { EditUserFormValues } from "@/components/users/edit-user-form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -70,9 +71,10 @@ export default function UsersPage() {
         return;
     }
 
-    const auth = getAuth();
+    const secondaryApp = initializeApp(firebaseConfig, `create-user-${Date.now()}`);
+    const secondaryAuth = getAuth(secondaryApp);
     try {
-        const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
+        const userCredential = await createUserWithEmailAndPassword(secondaryAuth, values.email, values.password);
         const newUserId = userCredential.user.uid;
 
         const newUser: User = {
@@ -101,14 +103,16 @@ export default function UsersPage() {
 
     } catch (error: any) {
         console.error("Error adding user:", error);
-        const errorMessage = error.code === 'auth/email-already-in-use' 
+        const errorMessage = error.code === 'auth/email-already-in-use'
             ? "Este email já está em uso por outra conta."
             : "Ocorreu um erro ao criar o usuário.";
-        toast({ 
-            variant: 'destructive', 
+        toast({
+            variant: 'destructive',
             title: "Erro ao criar usuário",
             description: errorMessage
         });
+    } finally {
+        await deleteApp(secondaryApp);
     }
   };
 

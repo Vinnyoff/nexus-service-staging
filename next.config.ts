@@ -1,5 +1,12 @@
 
+// Se APP_ENV estiver definido (ex: "staging"), carrega .env.staging com prioridade.
+// Depois carrega .env como fallback para variáveis não definidas no arquivo específico.
+const APP_ENV = process.env.APP_ENV;
+if (APP_ENV) {
+  require('dotenv').config({ path: `.env.${APP_ENV}`, override: true });
+}
 require('dotenv').config();
+
 import type {NextConfig} from 'next';
 
 const withPWA = require("@ducanh2912/next-pwa").default({
@@ -39,10 +46,7 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  env: {
-    GEMINI_API_KEY: process.env.GEMINI_API_KEY,
-    NEXT_PUBLIC_GA_ID: process.env.NEXT_PUBLIC_GA_ID,
-  }
+
 };
 
 export default withPWA(nextConfig);

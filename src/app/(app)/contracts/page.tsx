@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { ServiceContract, Client, Sector, ExternalTicket, Checklist, ChecklistTaskState } from "@/lib/types";
+import { ServiceContract, Client, Sector, ExternalTicket, Checklist } from "@/lib/types";
 import { collection, addDoc, onSnapshot, doc, updateDoc, writeBatch, getDoc } from "firebase/firestore";
 import { db } from "@/firebase/config";
 import { useToast } from "@/hooks/use-toast";
@@ -106,51 +106,33 @@ export default function ContractsPage() {
       const contractRef = doc(collection(db, "serviceContracts"));
       batch.set(contractRef, newContractData);
       
-      // Create an immediate "start" ticket for each sector in the contract
-      for (const sectorId of values.sectorIds) {
-          const ticketRef = doc(collection(db, "external-tickets"));
-          
-          let checklistState: ChecklistTaskState[] | undefined = undefined;
-          const defaultChecklistId = values.defaultChecklists?.[sectorId];
-          
-          if(defaultChecklistId) {
-            const checklist = checklists.find(c => c.id === defaultChecklistId);
-            if (checklist) {
-                checklistState = checklist.tasks.map(task => ({
-                  taskId: task.id,
-                  completed: false,
-                  observation: '',
-                  photo: ''
-                }));
-            }
-          }
-
-          const newTicketData: Omit<ExternalTicket, 'id'> = {
-              client: {
-                id: client.id,
-                name: client.name,
-                phone: client.phone,
-                address: `${client.address.street}, ${client.address.number || 'S/N'}`,
-                isWhats: false,
-              },
-              requesterName: 'Sistema (Criação de Contrato)',
-              sectorId: sectorId,
-              creatorId: user.id,
-              description: `Manutenção preventiva de contrato.`,
-              type: 'contrato',
-              status: 'pendente',
-              createdAt: now.toISOString(),
-              updatedAt: now.toISOString(),
-              ...(defaultChecklistId && { checklistId: defaultChecklistId, checklist: checklistState })
-          };
-          batch.set(ticketRef, newTicketData);
-      }
+      // Cria 1 chamado inicial para o contrato — sem setor definido (visível para todos os setores)
+      const ticketRef = doc(collection(db, "external-tickets"));
+      const newTicketData: Omit<ExternalTicket, 'id'> = {
+        client: {
+          id: client.id,
+          name: client.name,
+          phone: client.phone,
+          address: `${client.address.street}, ${client.address.number || 'S/N'}`,
+          isWhats: false,
+        },
+        requesterName: 'Sistema (Criação de Contrato)',
+        contractId: contractRef.id,
+        // sectorId não definido — qualquer setor pode assumir
+        creatorId: user.id,
+        description: 'Manutenção preventiva de contrato.',
+        type: 'contrato',
+        status: 'pendente',
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      };
+      batch.set(ticketRef, newTicketData);
 
       await batch.commit();
       
       toast({
-        title: "Contrato e chamados iniciais criados!",
-        description: `O contrato para ${client.name} e os primeiros chamados preventivos foram gerados.`,
+        title: "Contrato criado!",
+        description: `O contrato para ${client.name} foi criado com 1 chamado inicial disponível para todos os setores.`,
       });
       setIsNewDialogOpen(false);
 

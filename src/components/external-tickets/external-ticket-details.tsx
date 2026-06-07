@@ -170,14 +170,19 @@ export function ExternalTicketDetails({
     isCurrentUserAssigned ||
     currentUser.role === 'admin' ||
     currentUser.role === 'gerente' ||
-    (currentUser.role === 'encarregado' && currentUser.sectorIds?.includes(ticket.sectorId))
+    // Encarregado pode intervir se o ticket é do seu setor OU se o ticket ainda não tem setor (contrato sem setor)
+    (currentUser.role === 'encarregado' && (!ticket.sectorId || currentUser.sectorIds?.includes(ticket.sectorId)))
   );
-  
+
   const canSupervisorManage = currentUser && (currentUser.role === 'admin' || currentUser.role === 'gerente' || currentUser.role === 'encarregado');
   const canBeCancelled = !isConcluded && !isCancelled;
-  
+
   const assignableUsers = useMemo(() => {
-    return users.filter(u => (u.role === 'tecnico' || u.role === 'encarregado') && u.sectorIds?.includes(ticket.sectorId));
+    // Se o ticket não tem setor (contrato automático sem setor), mostra todos os técnicos/encarregados ativos
+    if (!ticket.sectorId) {
+      return users.filter(u => (u.role === 'tecnico' || u.role === 'encarregado') && u.status === 'active');
+    }
+    return users.filter(u => (u.role === 'tecnico' || u.role === 'encarregado') && u.sectorIds?.includes(ticket.sectorId!));
   }, [users, ticket.sectorId]);
 
   const getCommentAuthor = (authorId: string) => users.find((u) => u.id === authorId);
