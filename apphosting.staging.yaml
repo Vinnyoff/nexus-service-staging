@@ -1,48 +1,48 @@
-# Firebase App Hosting — configuração do backend de STAGING
-# Este arquivo sobrescreve apphosting.yaml apenas para o backend "staging".
+# Firebase App Hosting — backend de STAGING
+# Todas as vars via Secret Manager para garantir disponibilidade no BUILD.
 
 runConfig:
   maxInstances: 1
 
 env:
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-    value: "AIzaSyCc_Co7DdDPiINuw8RtalR8bG7IjvEjrSk"
+    secret: NEXT_PUBLIC_FIREBASE_API_KEY
     availability:
       - BUILD
       - RUNTIME
 
   - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-    value: "euroinfo-chamados-dev.firebaseapp.com"
+    secret: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
     availability:
       - BUILD
       - RUNTIME
 
   - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
-    value: "euroinfo-chamados-dev"
+    secret: NEXT_PUBLIC_FIREBASE_PROJECT_ID
     availability:
       - BUILD
       - RUNTIME
 
   - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-    value: "euroinfo-chamados-dev.firebasestorage.app"
+    secret: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
     availability:
       - BUILD
       - RUNTIME
 
   - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-    value: "874985755784"
+    secret: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
     availability:
       - BUILD
       - RUNTIME
 
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
-    value: "1:874985755784:web:b4bd336068d280b4b73b3d"
+    secret: NEXT_PUBLIC_FIREBASE_APP_ID
     availability:
       - BUILD
       - RUNTIME
 
   - variable: NEXT_PUBLIC_VAPID_PUBLIC_KEY
-    value: "BKLR5LU48Q9KZG1lm7lW7JhFu8b0v33CEOy16gMLTugCXYF4n9N_7ZktO0keK0iMbY_FgfdPxcX3v8v0z_z20Cc"
+    secret: NEXT_PUBLIC_VAPID_PUBLIC_KEY
     availability:
       - BUILD
       - RUNTIME
