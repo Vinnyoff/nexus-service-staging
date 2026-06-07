@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from "next/link";
@@ -12,25 +11,21 @@ export function BottomNavLinks() {
   const { user } = useAuth();
 
   if (!user) return null;
-  
-  const hasPermission = (item: NavItem) => {
-    return item.roles.includes(user.role);
-  };
+
+  const hasPermission = (item: NavItem) => item.roles.includes(user.role);
 
   const mobilePrefs = user.mobileNavPreferences || {};
-  
+
   const permittedItems = primaryNavItems.filter(item => !item.hidden && hasPermission(item));
-  
-  // If user has set any preferences, use them. Otherwise, show all permitted items.
-  const preferredItems = Object.keys(mobilePrefs).length > 0 
+
+  const preferredItems = Object.keys(mobilePrefs).length > 0
     ? permittedItems.filter(item => mobilePrefs[item.mobileKey] !== false)
     : permittedItems;
 
-  // Fallback to permitted items if preferences result in an empty list
-  let finalNavItems = preferredItems.length > 0 ? preferredItems : permittedItems;
+  const finalNavItems = preferredItems.length > 0 ? preferredItems : permittedItems;
 
   return (
-    <div className="flex h-16 overflow-x-auto">
+    <div className="flex h-[4.5rem] overflow-x-auto">
       {finalNavItems.map((item) => {
         const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
         return (
@@ -38,12 +33,17 @@ export function BottomNavLinks() {
             key={item.href}
             href={item.href}
             className={cn(
-              "flex flex-1 flex-col items-center justify-center gap-1 p-2 text-muted-foreground transition-colors hover:bg-muted min-w-[80px]",
-              isActive && "text-primary"
+              "relative flex flex-1 flex-col items-center justify-center gap-1.5 py-2 transition-colors min-w-[72px]",
+              isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
             )}
           >
-            <item.icon className="h-5 w-5" />
-            <span className="text-[10px] font-medium text-center">{item.label}</span>
+            {isActive && (
+              <span className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-8 rounded-full bg-primary" />
+            )}
+            <item.icon className={cn("h-6 w-6 transition-transform duration-150", isActive && "scale-110")} />
+            <span className={cn("text-[11px] font-medium text-center leading-none", isActive && "font-semibold")}>
+              {item.label}
+            </span>
           </Link>
         );
       })}

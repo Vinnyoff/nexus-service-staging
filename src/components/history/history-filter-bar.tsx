@@ -42,40 +42,38 @@ export function HistoryFilterBar({
   };
 
   return (
-    <div className="flex flex-wrap items-end gap-4 rounded-lg border bg-card p-4">
-      <DatePicker
-        date={filters.startDate}
-        onDateChange={(date) => onFilterChange({ ...filters, startDate: date })}
-        label="Data de início"
-      />
-      <DatePicker
-        date={filters.endDate}
-        onDateChange={(date) => onFilterChange({ ...filters, endDate: date })}
-        label="Data de fim"
-      />
-      {canFilterByTechnician && (
-        <div className="flex-1 min-w-[200px]">
+    <div className="rounded-lg border bg-card p-4 space-y-3">
+      <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-end sm:gap-4">
+        <DatePicker
+          date={filters.startDate}
+          onDateChange={(date) => onFilterChange({ ...filters, startDate: date })}
+          label="Data de início"
+        />
+        <DatePicker
+          date={filters.endDate}
+          onDateChange={(date) => onFilterChange({ ...filters, endDate: date })}
+          label="Data de fim"
+        />
+        {canFilterByTechnician && (
+          <div className="col-span-2 sm:flex-1 sm:min-w-[200px]">
             <label className="text-sm font-medium mb-2 block">Técnico</label>
             <Select
-                value={filters.technicianId}
-                onValueChange={(value) => onFilterChange({ ...filters, technicianId: value })}
+              value={filters.technicianId}
+              onValueChange={(value) => onFilterChange({ ...filters, technicianId: value })}
             >
-            <SelectTrigger>
-              <SelectValue placeholder="Selecione um técnico" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os técnicos</SelectItem>
-              {visibleTechnicians.map(tech => (
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Selecione um técnico" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os técnicos</SelectItem>
+                {visibleTechnicians.map(tech => (
                   <SelectItem key={tech.id} value={tech.id}>{tech.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
-      <Button onClick={handleFilter}>
-        <Search className="mr-2 h-4 w-4" />
-        Buscar
-      </Button>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

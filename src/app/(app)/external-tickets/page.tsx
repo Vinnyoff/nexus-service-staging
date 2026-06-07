@@ -5,18 +5,20 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Loader2, LayoutDashboard, List, RefreshCcw, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from "lucide-react";
+import { PlusCircle, Loader2, LayoutDashboard, List, RefreshCcw, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Download } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { NewExternalTicketForm, NewExternalTicketFormValues } from "@/components/external-tickets/new-external-ticket-form";
 import { ExternalTicket, Sector, User, Technician, Comment, Checklist, ChecklistTaskState } from "@/lib/types";
 import { useAuth } from "@/hooks/use-auth";
 import { ExternalTicketCard } from "@/components/external-tickets/external-ticket-card";
 import { ExternalTicketsFilterBar, StatusFilter } from "@/components/external-tickets/external-tickets-filter-bar";
+import { TicketsStatsBar } from "@/components/external-tickets/tickets-stats-bar";
 import { useToast } from "@/hooks/use-toast";
 import { addDoc, collection, getDocs, doc, updateDoc, deleteField, writeBatch, onSnapshot, arrayUnion, getDoc } from "firebase/firestore";
 import { db } from "@/firebase/config";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { isToday, parseISO, isPast } from "date-fns";
+import { isToday, parseISO, isPast, format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ExternalTicketsTable } from "@/components/external-tickets/external-tickets-table";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -24,13 +26,15 @@ import { sendWhatsappMessage } from "@/lib/services/notification-service";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import * as XLSX from "xlsx";
 
 
 type ConfirmationState = {
     isOpen: boolean;
-    action: 'reopen' | 'cancel' | 'take' | null;
+    action: 'reopen' | 'cancel' | 'take' | 'reassign' | null;
     ticket: ExternalTicket | null;
     reason?: string;
+    reassignTechnicianId?: string;
 };
 
 const STATUS_FILTER_STORAGE_KEY = 'external_tickets_status_filter';
@@ -50,7 +54,7 @@ export default function ExternalTicketsPage() {
   const { user } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
-  const [confirmation, setConfirmation] = useState<ConfirmationState>({ isOpen: false, action: null, ticket: null, reason: '' });
+  const [confirmation, setConfirmation] = useState<ConfirmationState>({ isOpen: false, action: null, ticket: null, reason: '', reassignTechnicianId: '' });
   const isMobile = useIsMobile();
   const [viewMode, setViewMode] = useState<ViewMode>('kanban');
 
@@ -59,6 +63,8 @@ export default function ExternalTicketsPage() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => {
     if (typeof window !== 'undefined') {
@@ -70,7 +76,7 @@ export default function ExternalTicketsPage() {
   const [sectorFilter, setSectorFilter] = useState<string>('all');
   const [contractOnly, setContractOnly] = useState(false);
   const [myTicketsOnly, setMyTicketsOnly] = useState(false);
-  
+
   useEffect(() => {
     const storedViewMode = sessionStorage.getItem(VIEW_MODE_STORAGE_KEY) as ViewMode | null;
     if (isMobile) {
@@ -82,21 +88,19 @@ export default function ExternalTicketsPage() {
 
   useEffect(() => {
     setLoading(true);
-    
+
     let loadedCount = 0;
     const totalCollections = 5;
 
     const onCollectionLoad = () => {
         loadedCount++;
-        if (loadedCount === totalCollections) {
-            setLoading(false);
-        }
+        if (loadedCount === totalCollections) setLoading(false);
     };
-    
+
     const unsubUsers = onSnapshot(collection(db, "users"), (snapshot) => {
         const usersData = snapshot.docs.map(doc => {
             const userData = { id: doc.id, ...doc.data() } as User;
-             if ((userData as any).sectorId && !userData.sectorIds) {
+            if ((userData as any).sectorId && !userData.sectorIds) {
                 userData.sectorIds = [(userData as any).sectorId];
             } else if (!userData.sectorIds) {
                 userData.sectorIds = [];
@@ -106,12 +110,12 @@ export default function ExternalTicketsPage() {
         setUsers(usersData);
         onCollectionLoad();
     }, () => { setUsers([]); onCollectionLoad(); });
-    
+
     const unsubSectors = onSnapshot(collection(db, "sectors"), (snapshot) => {
         setSectors(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sector)));
         onCollectionLoad();
     }, () => { setSectors([]); onCollectionLoad(); });
-    
+
     const unsubTechs = onSnapshot(collection(db, "technicians"), (snapshot) => {
         setTechnicians(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Technician)));
         onCollectionLoad();
@@ -122,101 +126,71 @@ export default function ExternalTicketsPage() {
         setPullDistance(0);
         onCollectionLoad();
     }, () => { setTickets([]); onCollectionLoad(); });
-    
+
     const unsubChecklists = onSnapshot(collection(db, "checklists"), (snapshot) => {
         setChecklists(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Checklist)));
         onCollectionLoad();
     }, () => { setChecklists([]); onCollectionLoad(); });
 
-    // Failsafe to turn off loading
-    const timer = setTimeout(() => {
-      if (loading) setLoading(false);
-    }, 5000);
+    const timer = setTimeout(() => setLoading(false), 5000);
 
     return () => {
-        unsubUsers();
-        unsubSectors();
-        unsubTechs();
-        unsubTickets();
-        unsubChecklists();
+        unsubUsers(); unsubSectors(); unsubTechs(); unsubTickets(); unsubChecklists();
         clearTimeout(timer);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  
-  // Persist status filter to session storage
   useEffect(() => {
     sessionStorage.setItem(STATUS_FILTER_STORAGE_KEY, statusFilter);
   }, [statusFilter]);
 
-  // Reset page when any filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, technicianFilter, sectorFilter, contractOnly, myTicketsOnly, searchQuery]);
-  
-  // Persist view mode
+  }, [statusFilter, technicianFilter, sectorFilter, contractOnly, myTicketsOnly, searchQuery, dateFrom, dateTo]);
+
   useEffect(() => {
-    if (!isMobile) {
-        sessionStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode);
-    }
+    if (!isMobile) sessionStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode);
   }, [viewMode, isMobile]);
-  
-  // Set "myTicketsOnly" to true by default for certain statuses, unless a tech is filtered.
+
   useEffect(() => {
     if ((statusFilter === 'em andamento' || statusFilter === 'concluído') && technicianFilter === 'all') {
       setMyTicketsOnly(true);
     } else {
       setMyTicketsOnly(false);
     }
-    
-    // Reset technician filter when switching to 'pendente'
-    if (statusFilter === 'pendente') {
-      setTechnicianFilter('all');
-    }
+    if (statusFilter === 'pendente') setTechnicianFilter('all');
   }, [statusFilter, technicianFilter]);
 
-  // Uncheck "myTicketsOnly" if a technician is selected from the filter
   useEffect(() => {
-    if (technicianFilter !== 'all') {
-      setMyTicketsOnly(false);
-    }
+    if (technicianFilter !== 'all') setMyTicketsOnly(false);
   }, [technicianFilter]);
-  
+
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (window.scrollY === 0) {
-      setPullStartY(e.touches[0].clientY);
-    }
+    if (window.scrollY === 0) setPullStartY(e.touches[0].clientY);
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (window.scrollY === 0 && pullStartY > 0) {
-      const currentY = e.touches[0].clientY;
-      const distance = currentY - pullStartY;
+      const distance = e.touches[0].clientY - pullStartY;
       if (distance > 0) {
-        e.preventDefault(); // Prevent browser's default pull-to-refresh
+        e.preventDefault();
         setPullDistance(Math.min(distance, 150));
       }
     }
   };
 
   const handleTouchEnd = () => {
-    if (pullDistance > 100) {
-        // With real-time, manual refresh is less critical, but we can keep it as a backup.
-        // The listener will handle the updates, so we just reset the visual.
-        setPullDistance(0);
-    } else {
-      setPullDistance(0);
-    }
+    setPullDistance(0);
     setPullStartY(0);
   };
 
-
   const handleAddTicket = async (values: NewExternalTicketFormValues & { type: 'padrão' | 'contrato' | 'urgente' | 'agendado' | 'retorno', slaExpiresAt?: string, priority?: string }) => {
     if (!user) return;
-  
+
     const newTicketData: Partial<ExternalTicket> = {
       client: {
-        id: '', // Will be filled if clientId exists
+        id: '',
         name: values.clientName,
         phone: values.contact || '',
         isWhats: values.isWhatsapp,
@@ -225,132 +199,96 @@ export default function ExternalTicketsPage() {
       creatorId: user.id,
       description: values.description,
       type: values.type,
-      status: 'pendente' as const, // Default status
+      status: 'pendente' as const,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       ...(values.priority && { priority: values.priority as any }),
     };
-  
-    if (values.clientId) {
-      newTicketData.client.id = values.clientId;
-    }
-  
+
+    if (values.clientId) newTicketData.client!.id = values.clientId;
+
     if (values.address?.street) {
-      newTicketData.client.address = `${values.address.street}, ${values.address.number || 'S/N'} - ${values.address.neighborhood}, ${values.address.city} - ${values.address.state}`;
+      newTicketData.client!.address = `${values.address.street}, ${values.address.number || 'S/N'} - ${values.address.neighborhood}, ${values.address.city} - ${values.address.state}`;
     }
-  
-    if (values.requesterName) {
-      newTicketData.requesterName = values.requesterName;
-    }
-  
+
+    if (values.requesterName) newTicketData.requesterName = values.requesterName;
+
     if (values.assigneeId) {
       newTicketData.technicianId = values.assigneeId;
       newTicketData.status = 'em andamento';
     }
-  
+
     if (values.scheduledToDate) {
       const timePart = values.scheduledToTime || '00:00:00';
       const datePart = values.scheduledToDate.toISOString().split('T')[0];
       newTicketData.scheduledTo = `${datePart}T${timePart}`;
     }
-  
-    if (values.slaExpiresAt) {
-      newTicketData.slaExpiresAt = values.slaExpiresAt;
-    }
+
+    if (values.slaExpiresAt) newTicketData.slaExpiresAt = values.slaExpiresAt;
 
     if (values.checklistId) {
       const selectedChecklist = checklists.find(c => c.id === values.checklistId);
-      if(selectedChecklist) {
+      if (selectedChecklist) {
           newTicketData.checklistId = values.checklistId;
           newTicketData.checklist = selectedChecklist.tasks.map(task => ({ taskId: task.id, completed: false, observation: '', photo: '' }));
       }
     }
-  
+
     try {
       const docRef = await addDoc(collection(db, "external-tickets"), newTicketData);
-      
+
       const sector = sectors.find(s => s.id === newTicketData.sectorId);
       const sectorGroupId = sector?.whatsappGroupId;
-      
-      let messageStatusText = `*Status:* ${newTicketData.status === 'pendente' ? 'Pendente' : `Em andamento por ${user.name}`}`;
       const assignedTechnician = technicians.find(t => t.id === newTicketData.technicianId);
+      let messageStatusText = newTicketData.technicianId && assignedTechnician
+        ? `*Status:* Em andamento por ${assignedTechnician.name}`
+        : `*Status:* Pendente`;
 
-      if (newTicketData.technicianId && assignedTechnician) {
-          messageStatusText = `*Status:* Em andamento por ${assignedTechnician.name}`;
-      }
-      
       let message = `⚠️ Novo Chamado Criado ⚠️\n\n`
-          + `*Cliente:* ${newTicketData.client.name}\n`
-          + `*Contato:* ${newTicketData.client.phone || 'N/A'}\n`
-          + `*Solicitante:* ${newTicketData.requesterName || 'N/A'}\n`
-          + `*Endereço:* ${newTicketData.client.address || 'N/A'}\n\n`
-          + `*Descrição:* ${newTicketData.description}\n\n`
-          + `*Tipo:* ${newTicketData.type}`;
+        + `*Cliente:* ${newTicketData.client!.name}\n`
+        + `*Contato:* ${newTicketData.client!.phone || 'N/A'}\n`
+        + `*Solicitante:* ${newTicketData.requesterName || 'N/A'}\n`
+        + `*Endereço:* ${newTicketData.client!.address || 'N/A'}\n\n`
+        + `*Descrição:* ${newTicketData.description}\n\n`
+        + `*Tipo:* ${newTicketData.type}`;
 
       if (newTicketData.type === 'contrato' && newTicketData.priority) {
         message += `\n*Prioridade do Contrato:* 🚨${newTicketData.priority}`;
       }
-
-      message += `\n*Atribuído por:* ${user.name}\n\n`
-               + `${messageStatusText}`;
+      message += `\n*Atribuído por:* ${user.name}\n\n${messageStatusText}`;
 
       if (newTicketData.technicianId) {
         const techUser = users.find(u => u.id === assignedTechnician?.userId);
-        if (techUser?.phone) {
-            await sendWhatsappMessage(techUser.phone, message, techUser.id, `/external-tickets/${docRef.id}`);
-        }
+        if (techUser?.phone) await sendWhatsappMessage(techUser.phone, message, techUser.id, `/external-tickets/${docRef.id}`);
       }
-      // Sempre notifica o grupo, se houver
-      if (sectorGroupId) {
-          await sendWhatsappMessage(sectorGroupId, message);
-      }
+      if (sectorGroupId) await sendWhatsappMessage(sectorGroupId, message);
 
       await addDoc(collection(db, "system-logs"), {
         userId: user.id,
         event: 'EXTERNAL_TICKET_CREATED',
         timestamp: new Date().toISOString(),
-        details: {
-            ticketId: docRef.id,
-            clientName: values.clientName,
-        }
+        details: { ticketId: docRef.id, clientName: values.clientName },
       });
-      
+
       setIsNewTicketDialogOpen(false);
-      toast({
-        title: 'Chamado criado com sucesso!',
-        description: `O chamado para ${values.clientName} foi aberto.`,
-      });
-  
+      toast({ title: 'Chamado criado com sucesso!', description: `O chamado para ${values.clientName} foi aberto.` });
+
     } catch (error) {
        console.error("Error adding ticket: ", error);
-       toast({
-        variant: "destructive",
-        title: "Erro ao criar chamado",
-        description: "Ocorreu um erro ao salvar os dados. Tente novamente.",
-      });
-      // Re-throw to inform the form
-      throw error;
+       toast({ variant: "destructive", title: "Erro ao criar chamado", description: "Ocorreu um erro ao salvar os dados. Tente novamente." });
+       throw error;
     }
   }
-  
-  const handleViewDetails = (ticketId: string) => {
-    router.push(`/external-tickets/${ticketId}`);
-  };
+
+  const handleViewDetails = (ticketId: string) => router.push(`/external-tickets/${ticketId}`);
 
   const handleStatusChange = async (id: string, status: ExternalTicket['status']) => {
     const ticketRef = doc(db, "external-tickets", id);
     try {
-      await updateDoc(ticketRef, {
-        status,
-        updatedAt: new Date().toISOString(),
-      });
+      await updateDoc(ticketRef, { status, updatedAt: new Date().toISOString() });
     } catch (error) {
       console.error(`Error updating status for ticket ${id}:`, error);
-       toast({
-        variant: "destructive",
-        title: "Erro ao atualizar status",
-        description: "Não foi possível atualizar o chamado. Tente novamente.",
-      });
+      toast({ variant: "destructive", title: "Erro ao atualizar status", description: "Não foi possível atualizar o chamado. Tente novamente." });
     }
   };
 
@@ -365,49 +303,54 @@ export default function ExternalTicketsPage() {
                 status: 'em andamento',
                 updatedAt: new Date().toISOString(),
             };
-
-            // Ao assumir um ticket sem setor, atribui o setor do usuário automaticamente
             if (!ticket.sectorId && user.sectorIds?.length > 0) {
                 updatePayload.sectorId = user.sectorIds[0];
             }
-
             await updateDoc(ticketRef, updatePayload);
 
             const claimedSectorId = ticket.sectorId || updatePayload.sectorId;
             const sector = sectors.find(s => s.id === claimedSectorId);
-            const sectorGroupId = sector?.whatsappGroupId;
-
-            const message = `🏃‍♂️ Chamado em Andamento 🏃‍♂️\n\n*Cliente:* ${ticket.client.name}\n*Status:* Em andamento por ${user.name}`;
-            if (sectorGroupId) {
-                await sendWhatsappMessage(sectorGroupId, message);
+            if (sector?.whatsappGroupId) {
+                await sendWhatsappMessage(sector.whatsappGroupId, `🏃‍♂️ Chamado em Andamento 🏃‍♂️\n\n*Cliente:* ${ticket.client.name}\n*Status:* Em andamento por ${user.name}`);
             }
         }
-
         toast({ title: 'Chamado Atribuído!', description: `Você pegou o chamado #${id.substring(0,4)}.` });
     } catch (error) {
         console.error(`Error assigning ticket ${id}:`, error);
         toast({ variant: 'destructive', title: 'Erro ao atribuir chamado.' });
     }
   }
-  
+
+  const handleReassignTicket = async (id: string, newTechnicianId: string) => {
+    if (!user) return;
+    const ticketRef = doc(db, "external-tickets", id);
+    try {
+      const newTech = users.find(u => u.id === newTechnicianId);
+      await updateDoc(ticketRef, {
+        technicianId: newTechnicianId,
+        status: 'em andamento',
+        updatedAt: new Date().toISOString(),
+      });
+      toast({ title: 'Técnico reatribuído!', description: `Chamado atribuído a ${newTech?.name || 'novo técnico'}.` });
+    } catch (error) {
+      console.error(`Error reassigning ticket ${id}:`, error);
+      toast({ variant: 'destructive', title: 'Erro ao reatribuir chamado.' });
+    }
+  };
+
   const handleSetEnRoute = async (ticketId: string) => {
     if (!user || user.role !== 'tecnico') return;
-
     const batch = writeBatch(db);
     let targetTicket: ExternalTicket | undefined;
-
     const enRouteTime = new Date().toISOString();
 
     tickets.forEach(t => {
         if (t.technicianId === user.id) {
-            const isTarget = t.id === ticketId;
-            if (t.enRoute && !isTarget) {
-                const ticketRef = doc(db, "external-tickets", t.id);
-                batch.update(ticketRef, { enRoute: deleteField(), enRouteAt: deleteField() });
+            if (t.enRoute && t.id !== ticketId) {
+                batch.update(doc(db, "external-tickets", t.id), { enRoute: deleteField(), enRouteAt: deleteField() });
             }
-            if (isTarget) {
-                const ticketRef = doc(db, "external-tickets", ticketId);
-                batch.update(ticketRef, { enRoute: true, enRouteAt: enRouteTime });
+            if (t.id === ticketId) {
+                batch.update(doc(db, "external-tickets", ticketId), { enRoute: true, enRouteAt: enRouteTime });
                 targetTicket = { ...t, enRoute: true, enRouteAt: enRouteTime };
             }
         }
@@ -416,186 +359,179 @@ export default function ExternalTicketsPage() {
     try {
         await batch.commit();
         if (targetTicket) {
-            toast({
-                title: 'A caminho!',
-                description: `Próximo destino: ${targetTicket.client.name}.`,
-            });
+            toast({ title: 'A caminho!', description: `Próximo destino: ${targetTicket.client.name}.` });
         }
     } catch (error) {
         console.error("Error setting en-route status:", error);
-        toast({ variant: "destructive", title: "Erro ao marcar rota", description: "Não foi possível atualizar o status. Tente novamente." });
+        toast({ variant: "destructive", title: "Erro ao marcar rota" });
     }
-};
+  };
 
   const handleReopenTicket = async (id: string, reason: string) => {
     if (!user) return;
     const ticketRef = doc(db, "external-tickets", id);
     try {
-      const comment: Comment = {
-        id: `comment-${Date.now()}`,
-        authorId: user.id,
-        content: `**Chamado Reaberto:** ${reason}`,
-        createdAt: new Date().toISOString(),
-      };
-
-      await updateDoc(ticketRef, {
-        status: 'pendente',
-        type: 'retorno',
-        technicianId: deleteField(),
-        updatedAt: new Date().toISOString(),
-        comments: arrayUnion(comment)
-      });
-      toast({
-        title: 'Chamado Reaberto com Sucesso!',
-        description: `O chamado #${id.substring(0,4)} foi movido para pendentes como retorno.`,
-      });
+      const comment: Comment = { id: `comment-${Date.now()}`, authorId: user.id, content: `**Chamado Reaberto:** ${reason}`, createdAt: new Date().toISOString() };
+      await updateDoc(ticketRef, { status: 'pendente', type: 'retorno', technicianId: deleteField(), updatedAt: new Date().toISOString(), comments: arrayUnion(comment) });
+      toast({ title: 'Chamado Reaberto!', description: `O chamado #${id.substring(0,4)} foi movido para pendentes como retorno.` });
     } catch (error) {
-      console.error("Error reopening ticket: ", error);
-       toast({
-        variant: "destructive",
-        title: "Erro ao reabrir chamado",
-        description: "Não foi possível atualizar o chamado. Tente novamente.",
-      });
+      toast({ variant: "destructive", title: "Erro ao reabrir chamado" });
     }
   };
-  
+
   const handleCancelTicket = async (id: string, reason: string) => {
     if (!user) return;
     const ticketRef = doc(db, "external-tickets", id);
     try {
-        const comment: Comment = {
-            id: `comment-${Date.now()}`,
-            authorId: user.id,
-            content: `**Chamado Cancelado:** ${reason}`,
-            createdAt: new Date().toISOString(),
-        };
-
-        await updateDoc(ticketRef, {
-            status: 'cancelado',
-            updatedAt: new Date().toISOString(),
-            comments: arrayUnion(comment),
-        });
-
-        toast({
-            title: 'Chamado Cancelado',
-            description: `O chamado #${id.substring(0,4)} foi cancelado.`,
-        });
-
+        const comment: Comment = { id: `comment-${Date.now()}`, authorId: user.id, content: `**Chamado Cancelado:** ${reason}`, createdAt: new Date().toISOString() };
+        await updateDoc(ticketRef, { status: 'cancelado', updatedAt: new Date().toISOString(), comments: arrayUnion(comment) });
+        toast({ title: 'Chamado Cancelado', description: `O chamado #${id.substring(0,4)} foi cancelado.` });
     } catch (error) {
-        console.error("Error cancelling ticket: ", error);
-        toast({
-            variant: "destructive",
-            title: "Erro ao cancelar chamado",
-            description: "Não foi possível atualizar o chamado. Tente novamente.",
-        });
+        toast({ variant: "destructive", title: "Erro ao cancelar chamado" });
     }
   };
 
-  const handleConfirmAction = (action: 'reopen' | 'cancel' | 'take', ticket: ExternalTicket) => {
-    setConfirmation({ isOpen: true, action, ticket, reason: '' });
+  const handleConfirmAction = (action: 'reopen' | 'cancel' | 'take' | 'reassign', ticket: ExternalTicket) => {
+    setConfirmation({ isOpen: true, action, ticket, reason: '', reassignTechnicianId: '' });
   };
 
   const executeConfirmedAction = async () => {
     if (!confirmation.ticket || !confirmation.action) return;
-
-    const { ticket, action, reason } = confirmation;
+    const { ticket, action, reason, reassignTechnicianId } = confirmation;
 
     if (action === 'reopen' || action === 'cancel') {
-        if (!reason) {
-            toast({ variant: 'destructive', title: 'Justificativa obrigatória' });
-            return;
-        }
-        if (action === 'reopen') {
-            await handleReopenTicket(ticket.id, reason);
-        } else {
-            await handleCancelTicket(ticket.id, reason);
-        }
+        if (!reason) { toast({ variant: 'destructive', title: 'Justificativa obrigatória' }); return; }
+        if (action === 'reopen') await handleReopenTicket(ticket.id, reason);
+        else await handleCancelTicket(ticket.id, reason);
     } else if (action === 'take') {
         await handleAssignTicket(ticket.id);
+    } else if (action === 'reassign') {
+        if (!reassignTechnicianId) { toast({ variant: 'destructive', title: 'Selecione um técnico.' }); return; }
+        await handleReassignTicket(ticket.id, reassignTechnicianId);
     }
 
     setConfirmation({ isOpen: false, action: null, ticket: null });
   };
-  
+
   const getConfirmationContent = () => {
     switch (confirmation.action) {
       case 'reopen': return (
         <>
-            <AlertDialogTitle>Reabrir Chamado</AlertDialogTitle>
-            <AlertDialogDescription>
-                Por favor, informe o motivo para reabrir este chamado. A justificativa será adicionada aos comentários.
-            </AlertDialogDescription>
-            <div className="py-4">
-                <Label htmlFor="reopen-reason">Justificativa</Label>
-                <Textarea 
-                    id="reopen-reason"
-                    placeholder="Ex: O problema persistiu..."
-                    value={confirmation.reason}
-                    onChange={(e) => setConfirmation(c => ({ ...c, reason: e.target.value }))}
-                />
-            </div>
+          <AlertDialogTitle>Reabrir Chamado</AlertDialogTitle>
+          <AlertDialogDescription>Informe o motivo para reabrir este chamado. A justificativa será adicionada aos comentários.</AlertDialogDescription>
+          <div className="py-4">
+            <Label htmlFor="reopen-reason">Justificativa</Label>
+            <Textarea id="reopen-reason" placeholder="Ex: O problema persistiu..." value={confirmation.reason} onChange={(e) => setConfirmation(c => ({ ...c, reason: e.target.value }))} />
+          </div>
         </>
       );
       case 'cancel': return (
         <>
-            <AlertDialogTitle>Confirmar Cancelamento</AlertDialogTitle>
+          <AlertDialogTitle>Confirmar Cancelamento</AlertDialogTitle>
+          <AlertDialogDescription>Informe o motivo do cancelamento. Essa informação será salva nos comentários do chamado.</AlertDialogDescription>
+          <div className="py-4">
+            <Label htmlFor="cancel-reason">Justificativa</Label>
+            <Textarea id="cancel-reason" placeholder="Ex: Cliente solicitou o cancelamento..." value={confirmation.reason} onChange={(e) => setConfirmation(c => ({ ...c, reason: e.target.value }))} />
+          </div>
+        </>
+      );
+      case 'take': return (
+        <>
+          <AlertDialogTitle>Confirmar Atribuição</AlertDialogTitle>
+          <AlertDialogDescription>Você tem certeza que deseja pegar este chamado?</AlertDialogDescription>
+        </>
+      );
+      case 'reassign': {
+        const sectorId = confirmation.ticket?.sectorId;
+        const eligibleUsers = users.filter(u =>
+          (u.role === 'tecnico' || u.role === 'encarregado') &&
+          (!sectorId || u.sectorIds?.includes(sectorId))
+        );
+        return (
+          <>
+            <AlertDialogTitle>Reatribuir Técnico</AlertDialogTitle>
             <AlertDialogDescription>
-                Informe o motivo do cancelamento. Essa informação será salva nos comentários do chamado.
+              Selecione o novo técnico para assumir o chamado de <strong>{confirmation.ticket?.client.name}</strong>.
             </AlertDialogDescription>
             <div className="py-4">
-                <Label htmlFor="cancel-reason">Justificativa</Label>
-                <Textarea 
-                    id="cancel-reason"
-                    placeholder="Ex: Cliente solicitou o cancelamento..."
-                    value={confirmation.reason}
-                    onChange={(e) => setConfirmation(c => ({ ...c, reason: e.target.value }))}
-                />
+              <Label htmlFor="reassign-tech">Novo Técnico</Label>
+              <Select
+                value={confirmation.reassignTechnicianId || ''}
+                onValueChange={(v) => setConfirmation(c => ({ ...c, reassignTechnicianId: v }))}
+              >
+                <SelectTrigger id="reassign-tech" className="mt-1">
+                  <SelectValue placeholder="Selecione um técnico..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {eligibleUsers.map(u => (
+                    <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                  ))}
+                  {eligibleUsers.length === 0 && (
+                    <SelectItem value="__none__" disabled>Nenhum técnico disponível neste setor</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
             </div>
-        </>
-      );
-       case 'take': return (
-        <>
-            <AlertDialogTitle>Confirmar Atribuição</AlertDialogTitle>
-            <AlertDialogDescription>
-                Você tem certeza que deseja pegar este chamado?
-            </AlertDialogDescription>
-        </>
-      );
+          </>
+        );
+      }
       default: return null;
     }
+  };
+
+  const handleExport = () => {
+    if (!filteredAndSortedTickets.length) {
+      toast({ title: 'Nada para exportar', description: 'Nenhum chamado encontrado com os filtros atuais.' });
+      return;
+    }
+
+    const data = filteredAndSortedTickets.map(t => ({
+      'ID': t.id.substring(0, 8),
+      'Cliente': t.client.name,
+      'Descrição': t.description,
+      'Solicitante': t.requesterName || '',
+      'Status': t.status,
+      'Tipo': t.type,
+      'Prioridade': t.priority || '',
+      'Técnico': users.find(u => u.id === t.technicianId)?.name || '',
+      'Setor': sectors.find(s => s.id === t.sectorId)?.name || '',
+      'Endereço': t.client.address || '',
+      'Telefone': t.client.phone || '',
+      'Criado em': format(parseISO(t.createdAt), 'dd/MM/yyyy HH:mm', { locale: ptBR }),
+      'Atualizado em': format(parseISO(t.updatedAt), 'dd/MM/yyyy HH:mm', { locale: ptBR }),
+      'Agendado para': t.scheduledTo ? format(parseISO(t.scheduledTo), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : '',
+      'SLA expira': t.slaExpiresAt ? format(parseISO(t.slaExpiresAt), 'dd/MM/yyyy HH:mm', { locale: ptBR }) : '',
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Chamados Externos');
+    XLSX.writeFile(wb, `chamados_externos_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+    toast({ title: 'Exportado!', description: `${data.length} chamados exportados para Excel.` });
   };
 
   const filteredAndSortedTickets = useMemo(() => {
     const filtered = tickets.filter(ticket => {
         if (user?.role === 'encarregado' || user?.role === 'tecnico') {
-            // Tickets sem sectorId (contrato sem setor definido) são visíveis para todos
             if (ticket.sectorId && !user.sectorIds?.includes(ticket.sectorId)) return false;
         }
-        
+
+        if (dateFrom && ticket.createdAt.substring(0, 10) < dateFrom) return false;
+        if (dateTo && ticket.createdAt.substring(0, 10) > dateTo) return false;
+
         const query = searchQuery.toLowerCase();
-        if (query && 
+        if (query &&
             !ticket.client.name.toLowerCase().includes(query) &&
             !ticket.description.toLowerCase().includes(query) &&
             !(ticket.requesterName && ticket.requesterName.toLowerCase().includes(query))
-        ) {
-            return false;
-        }
+        ) return false;
 
-        if (statusFilter !== 'all' && ticket.status !== statusFilter) {
-          return false;
-        }
-        if (technicianFilter !== 'all' && ticket.technicianId !== technicianFilter) {
-            return false;
-        }
-        if (sectorFilter !== 'all' && ticket.sectorId !== sectorFilter) {
-            return false;
-        }
-        if (contractOnly && ticket.type !== 'contrato') {
-          return false;
-        }
-        if (myTicketsOnly && user && ticket.technicianId !== user.id) {
-          return false;
-        }
+        if (statusFilter !== 'all' && ticket.status !== statusFilter) return false;
+        if (technicianFilter !== 'all' && ticket.technicianId !== technicianFilter) return false;
+        if (sectorFilter !== 'all' && ticket.sectorId !== sectorFilter) return false;
+        if (contractOnly && ticket.type !== 'contrato') return false;
+        if (myTicketsOnly && user && ticket.technicianId !== user.id) return false;
+
         return true;
     });
 
@@ -608,7 +544,6 @@ export default function ExternalTicketsPage() {
             const routeOrder = user.routeOrder;
             const indexA = routeOrder.indexOf(a.id);
             const indexB = routeOrder.indexOf(b.id);
-      
             if (indexA !== -1 && indexB !== -1) return indexA - indexB;
             if (indexA !== -1) return -1;
             if (indexB !== -1) return 1;
@@ -627,17 +562,17 @@ export default function ExternalTicketsPage() {
         const priorityA = getPriority(a);
         const priorityB = getPriority(b);
         if (priorityA !== priorityB) return priorityA - priorityB;
-        
         return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     });
-  }, [tickets, user, statusFilter, technicianFilter, sectorFilter, contractOnly, myTicketsOnly, searchQuery]);
-  
-  const shouldPaginate = statusFilter === 'all' || !!searchQuery;
+  }, [tickets, user, statusFilter, technicianFilter, sectorFilter, contractOnly, myTicketsOnly, searchQuery, dateFrom, dateTo]);
+
+  const shouldPaginate = statusFilter === 'all' || !!searchQuery || !!(dateFrom || dateTo);
   const totalPages = Math.ceil(filteredAndSortedTickets.length / TICKETS_PER_PAGE);
-  const paginatedTickets = shouldPaginate ? filteredAndSortedTickets.slice((currentPage - 1) * TICKETS_PER_PAGE, currentPage * TICKETS_PER_PAGE) : filteredAndSortedTickets;
+  const paginatedTickets = shouldPaginate
+    ? filteredAndSortedTickets.slice((currentPage - 1) * TICKETS_PER_PAGE, currentPage * TICKETS_PER_PAGE)
+    : filteredAndSortedTickets;
 
   const hasActiveRoute = tickets.some(t => t.technicianId === user?.id && t.enRoute);
-
 
   if (loading) {
     return (
@@ -657,6 +592,10 @@ export default function ExternalTicketsPage() {
     <Dialog open={isNewTicketDialogOpen} onOpenChange={setIsNewTicketDialogOpen}>
       <PageHeader title="Chamados Externos" description="Gerencie os chamados de clientes externos.">
         <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleExport} title="Exportar para Excel" className="hidden sm:flex">
+              <Download className="h-4 w-4 mr-1.5" />
+              <span className="hidden sm:inline">Exportar</span>
+            </Button>
             {!isMobile && (
                 <ToggleGroup type="single" value={viewMode} onValueChange={(v) => v && setViewMode(v as ViewMode)}>
                     <ToggleGroupItem value="kanban" aria-label="Kanban view"><LayoutDashboard className="h-4 w-4" /></ToggleGroupItem>
@@ -664,29 +603,32 @@ export default function ExternalTicketsPage() {
                 </ToggleGroup>
             )}
             <DialogTrigger asChild>
-                <Button>
+                <Button className="hidden sm:flex">
                 <PlusCircle className="mr-2 h-4 w-4" />
                 Novo Chamado
                 </Button>
             </DialogTrigger>
         </div>
       </PageHeader>
-      
-      <div 
+
+      <div
+        className="w-full min-w-0"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         style={{ touchAction: 'pan-y' }}
       >
         <div
-            className="flex items-center justify-center p-4 text-muted-foreground transition-all duration-300"
+            className="flex items-center justify-center overflow-hidden text-muted-foreground transition-all duration-300"
             style={{ height: pullDistance / 2, opacity: Math.min(pullDistance / 100, 1) }}
         >
             <RefreshCcw className={`h-6 w-6 ${pullDistance > 100 ? 'animate-spin' : ''}`} />
         </div>
 
-        <div className="py-4">
-            <ExternalTicketsFilterBar
+        <div className="space-y-3 pb-4">
+          <TicketsStatsBar tickets={tickets} />
+
+          <ExternalTicketsFilterBar
             statusFilter={statusFilter}
             onStatusChange={setStatusFilter}
             technicianFilter={technicianFilter}
@@ -699,16 +641,20 @@ export default function ExternalTicketsPage() {
             onMyTicketsOnlyChange={setMyTicketsOnly}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
+            dateFrom={dateFrom}
+            onDateFromChange={setDateFrom}
+            dateTo={dateTo}
+            onDateToChange={setDateTo}
             currentUser={user}
             sectors={sectors}
-            />
+          />
         </div>
 
         {viewMode === 'kanban' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 min-w-0">
                 {paginatedTickets.map(ticket => (
-                <ExternalTicketCard 
-                    key={ticket.id} 
+                <ExternalTicketCard
+                    key={ticket.id}
                     ticket={ticket}
                     users={users}
                     sectors={sectors}
@@ -728,10 +674,10 @@ export default function ExternalTicketsPage() {
                 )}
             </div>
         ) : (
-            <ExternalTicketsTable 
-              data={paginatedTickets} 
-              users={users} 
-              sectors={sectors} 
+            <ExternalTicketsTable
+              data={paginatedTickets}
+              users={users}
+              sectors={sectors}
               currentUser={user}
               hasActiveRoute={hasActiveRoute}
               onSetEnRoute={handleSetEnRoute}
@@ -740,61 +686,41 @@ export default function ExternalTicketsPage() {
         )}
 
         {shouldPaginate && totalPages > 1 && (
-            <div className="flex items-center justify-end space-x-2 py-4">
-                 <div className="flex-1 text-sm text-muted-foreground">
-                    Página {currentPage} de {totalPages}
+            <div className="flex items-center justify-between py-4">
+                <span className="text-sm text-muted-foreground">
+                    {currentPage} / {totalPages}
+                </span>
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" className="hidden h-8 w-8 p-0 lg:flex" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}>
+                        <ChevronsLeft className="h-4 w-4" />
+                    </Button>
+                    <Button variant="outline" className="h-10 w-10 md:h-8 md:w-auto md:px-3 p-0" onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1}>
+                        <ChevronLeft className="h-4 w-4" />
+                        <span className="sr-only md:not-sr-only md:ml-1.5 text-sm">Anterior</span>
+                    </Button>
+                    <Button variant="outline" className="h-10 w-10 md:h-8 md:w-auto md:px-3 p-0" onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages}>
+                        <span className="sr-only md:not-sr-only md:mr-1.5 text-sm">Próximo</span>
+                        <ChevronRight className="h-4 w-4" />
+                    </Button>
+                    <Button variant="outline" className="hidden h-8 w-8 p-0 lg:flex" onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}>
+                        <ChevronsRight className="h-4 w-4" />
+                    </Button>
                 </div>
-                <Button
-                    variant="outline"
-                    className="hidden h-8 w-8 p-0 lg:flex"
-                    onClick={() => setCurrentPage(1)}
-                    disabled={currentPage === 1}
-                >
-                    <ChevronsLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                    disabled={currentPage === 1}
-                >
-                    <ChevronLeft className="mr-2 h-4 w-4" />
-                    Anterior
-                </Button>
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                    disabled={currentPage === totalPages}
-                >
-                    Próximo
-                    <ChevronRight className="ml-2 h-4 w-4" />
-                </Button>
-                 <Button
-                    variant="outline"
-                    className="hidden h-8 w-8 p-0 lg:flex"
-                    onClick={() => setCurrentPage(totalPages)}
-                    disabled={currentPage === totalPages}
-                >
-                    <ChevronsRight className="h-4 w-4" />
-                </Button>
             </div>
         )}
       </div>
 
-       <DialogContent className="sm:max-w-4xl">
+       <DialogContent className="w-full max-w-full sm:max-w-4xl h-[100dvh] sm:h-auto overflow-y-auto">
             <DialogHeader>
             <DialogTitle>Novo Chamado Externo</DialogTitle>
             </DialogHeader>
-            <NewExternalTicketForm 
-                onFinished={() => setIsNewTicketDialogOpen(false)} 
-                onSave={async (values) => {
-                    await handleAddTicket(values);
-                }}
+            <NewExternalTicketForm
+                onFinished={() => setIsNewTicketDialogOpen(false)}
+                onSave={async (values) => { await handleAddTicket(values); }}
             />
         </DialogContent>
 
-        <div className="fixed bottom-20 md:bottom-6 right-6 z-50">
+        <div className="fixed bottom-[5.5rem] md:bottom-6 right-6 z-50">
             <DialogTrigger asChild>
                 <Button size="icon" className="rounded-full h-14 w-14 shadow-lg">
                     <PlusCircle className="h-6 w-6" />
@@ -803,7 +729,6 @@ export default function ExternalTicketsPage() {
             </DialogTrigger>
         </div>
 
-
        <AlertDialog open={confirmation.isOpen} onOpenChange={(open) => !open && setConfirmation({isOpen: false, action: null, ticket: null})}>
         <AlertDialogContent>
             <AlertDialogHeader>
@@ -811,7 +736,15 @@ export default function ExternalTicketsPage() {
             </AlertDialogHeader>
             <AlertDialogFooter>
                 <AlertDialogCancel>Voltar</AlertDialogCancel>
-                <AlertDialogAction onClick={executeConfirmedAction} disabled={(confirmation.action === 'reopen' || confirmation.action === 'cancel') && !confirmation.reason}>Confirmar</AlertDialogAction>
+                <AlertDialogAction
+                  onClick={executeConfirmedAction}
+                  disabled={
+                    ((confirmation.action === 'reopen' || confirmation.action === 'cancel') && !confirmation.reason) ||
+                    (confirmation.action === 'reassign' && !confirmation.reassignTechnicianId)
+                  }
+                >
+                  Confirmar
+                </AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

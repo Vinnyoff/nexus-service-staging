@@ -5,13 +5,14 @@ import { UserNav } from "@/components/user-nav";
 import { BottomNavBar } from '@/components/mobile/bottom-nav-bar';
 import { useAuth } from '@/hooks/use-auth';
 import { PushBoot } from '@/components/push/PushBoot';
+import { Logo } from '@/components/logo';
 
 export default function MobileAppLayout({ children }: { children: React.ReactNode }) {
     const { user } = useAuth();
 
     useEffect(() => {
         if (!user) return;
-    
+
         if (typeof window !== 'undefined' && 'serviceWorker' in navigator && window.PushManager) {
         navigator.serviceWorker.ready.then(registration => {
             registration.pushManager.getSubscription().then(subscription => {
@@ -26,7 +27,6 @@ export default function MobileAppLayout({ children }: { children: React.ReactNod
                         userVisibleOnly: true,
                         applicationServerKey: vapidPublicKey
                     }).then(newSubscription => {
-                        console.log('New push subscription:', newSubscription);
                         fetch('/api/notifications/subscribe', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -40,7 +40,6 @@ export default function MobileAppLayout({ children }: { children: React.ReactNod
                         }
                     });
                 } else {
-                    console.log('Existing push subscription found.');
                     fetch('/api/notifications/subscribe', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -55,13 +54,11 @@ export default function MobileAppLayout({ children }: { children: React.ReactNod
     return (
         <div className="flex flex-col h-screen pt-[--safe-area-inset-top]">
             <PushBoot />
-            <header className="flex h-14 items-center shrink-0 gap-4 border-b bg-background px-4">
-                <div className="flex-1 text-lg font-semibold text-foreground">Euroinfo</div>
-                <div className="flex items-center gap-2">
-                    <UserNav />
-                </div>
+            <header className="flex h-14 items-center shrink-0 justify-between px-4 border-b bg-card">
+                <Logo />
+                <UserNav />
             </header>
-            <main className="flex-1 overflow-y-auto bg-muted/40 p-4 pb-[calc(4rem+var(--safe-area-inset-bottom))]">
+            <main className="flex-1 overflow-y-auto overflow-x-hidden bg-muted/30 p-4 pb-[calc(4.5rem+var(--safe-area-inset-bottom))]">
                 {children}
             </main>
             <BottomNavBar />

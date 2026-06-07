@@ -29,14 +29,14 @@ export function SectorStatsCard({ sector, tickets, technicians }: SectorStatsCar
                            <p className="text-sm font-medium text-muted-foreground">Chamados Pendentes</p>
                            <p className="text-2xl font-bold">{pendingTickets}</p>
                        </div>
-                       <Clock className="h-6 w-6 text-muted-foreground" />
+                       <Clock className="h-6 w-6 text-indigo-500" />
                    </div>
                    <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
                        <div>
                            <p className="text-sm font-medium text-muted-foreground">Em Andamento</p>
                            <p className="text-2xl font-bold">{inProgressTickets}</p>
                        </div>
-                       <Wrench className="h-6 w-6 text-muted-foreground" />
+                       <Wrench className="h-6 w-6 text-orange-500" />
                    </div>
                    <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
                        <div>

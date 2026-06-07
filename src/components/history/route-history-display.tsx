@@ -41,16 +41,16 @@ export function RouteHistoryDisplay({ historyEntries, allTickets }: RouteHistory
                     return (
                         <AccordionItem value={`item-${index}`} key={`${entry.technicianId}-${entry.date}`}>
                             <AccordionTrigger>
-                               <div className="flex justify-between items-center w-full pr-4">
-                                    <div className="flex flex-col text-left">
-                                        <span className="font-semibold">{format(parseISO(entry.date), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</span>
-                                        <span className="text-sm text-muted-foreground">{entry.technicianName}</span>
+                               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center w-full pr-4 gap-1 sm:gap-4 min-w-0">
+                                    <div className="flex flex-col text-left min-w-0">
+                                        <span className="font-semibold truncate">{format(parseISO(entry.date), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</span>
+                                        <span className="text-sm text-muted-foreground truncate">{entry.technicianName}</span>
                                     </div>
-                                    <div className="flex items-center gap-4">
+                                    <div className="flex items-center gap-2 shrink-0">
                                          {entry.finishedAt && (
-                                            <Badge variant="secondary">Finalizada às {formatTime(entry.finishedAt)}</Badge>
+                                            <Badge variant="secondary" className="text-xs">às {formatTime(entry.finishedAt)}</Badge>
                                          )}
-                                         <Badge variant="outline">{routeTickets.length} paradas</Badge>
+                                         <Badge variant="outline" className="text-xs">{routeTickets.length} paradas</Badge>
                                     </div>
                                </div>
                             </AccordionTrigger>

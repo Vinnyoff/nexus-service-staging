@@ -52,8 +52,8 @@ export default function WebAppLayout({ children }: { children: React.ReactNode }
 
     return (
         <>
-            <Sidebar collapsible="icon" className='border-r'>
-                <SidebarHeader className="p-4 justify-center mt-2 bg-muted/50">
+            <Sidebar collapsible="icon" className="border-r border-sidebar-border">
+                <SidebarHeader className="p-4 justify-center mt-2">
                     <Link href="/dashboard">
                         <Logo />
                     </Link>
@@ -63,25 +63,32 @@ export default function WebAppLayout({ children }: { children: React.ReactNode }
                     <NavLinks />
                 </SidebarContent>
                 <SidebarSeparator />
-                <SidebarFooter className="p-2 group-data-[state=collapsed]:hidden">
-                    <div className="text-center text-xs text-muted-foreground space-y-1">
+                <SidebarFooter className="p-3 group-data-[state=collapsed]:hidden">
+                    <div className="text-center text-[11px] text-sidebar-foreground/40 space-y-0.5">
                         <p>&copy; {new Date().getFullYear()} Euroinfo</p>
-                        <p>Desenvolvido por <span className="font-semibold text-foreground">Incode Dev</span></p>
-                        <Link href="https://wa.me/5569981003976" target="_blank" className="font-semibold text-foreground hover:underline">+55 69 98100-3976</Link>
+                        <p>
+                            Dev by{' '}
+                            <Link
+                                href="https://wa.me/5569981003976"
+                                target="_blank"
+                                className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors font-medium"
+                            >
+                                Incode Dev
+                            </Link>
+                        </p>
                     </div>
                 </SidebarFooter>
             </Sidebar>
+
             <SidebarInset>
-                <header className="flex h-14 items-center gap-4 border-b bg-card dark:bg-muted/40 px-4 lg:h-[60px] lg:px-6">
-                    <div className="text-lg font-semibold text-muted-foreground hidden md:flex items-center gap-2">
-                        <span>Nexus Service</span>
-                        <SidebarTrigger />
+                <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b border-border/60 bg-background/80 backdrop-blur-md px-4 lg:h-[60px] lg:px-6">
+                    <div className="hidden md:flex items-center gap-3">
+                        <SidebarTrigger className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" />
                     </div>
-                    <div className="flex-1 text-lg font-semibold text-muted-foreground md:hidden">Euroinfo</div>
-                    <div className="w-full flex-1" />
+                    <div className="flex-1" />
                     <div className="flex items-center gap-2">
                         <UserNav />
-                        <SidebarTrigger className="md:hidden"/>
+                        <SidebarTrigger className="md:hidden h-8 w-8 text-muted-foreground" />
                     </div>
                 </header>
                 <main className="flex flex-1 flex-col gap-4 md:gap-6 md:pb-6 pb-4 p-4 overflow-x-hidden">
